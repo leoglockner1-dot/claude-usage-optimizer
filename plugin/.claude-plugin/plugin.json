@@ -1,0 +1,7 @@
+{
+  "name": "model-manager",
+  "version": "0.1.4",
+  "description": "AI Model Manager: local task classification, per-turn model and effort routing, escalation, and usage tracking for a self-learning policy.",
+  "author": { "name": "Leo Glockner" },
+  "license": "MIT"
+}

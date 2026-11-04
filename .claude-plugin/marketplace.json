@@ -1,0 +1,7 @@
+{
+  "name": "ai-model-manager",
+  "owner": { "name": "Leo Glockner" },
+  "plugins": [
+    { "name": "model-manager", "source": "./plugin", "description": "Per-turn model routing and usage learning for Claude Code" }
+  ]
+}
