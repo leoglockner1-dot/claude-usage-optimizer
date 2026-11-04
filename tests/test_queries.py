@@ -107,6 +107,19 @@ class QueriesTest(unittest.TestCase):
         self.assertAlmostEqual(sum(b["cost_share"] for b in h.values()), 1.0, places=3)
         self.assertEqual(sum(b["requests"] for b in self.q.context_histogram(self.conn, None)), 4)
 
+    def test_context_daily(self):
+        self._events([
+            self._req("a", inp=100_000),
+            self._req("b", inp=300_000),
+            self._req("c", inp=500_000),
+        ])
+        d = self.q.context_daily(self.conn, 30)
+        self.assertEqual(sum(x["requests"] for x in d), 3)
+        if len(d) == 1:  # all three on the same UTC day
+            self.assertEqual(d[0]["median_context"], 300_000)
+            self.assertEqual(d[0]["p90_context"], 500_000)
+            self.assertGreater(d[0]["over_200k_cost_share"], 0.5)
+
     def test_daily_and_model_mix(self):
         self._events([
             self._req("a", model="claude-opus-5-5"),

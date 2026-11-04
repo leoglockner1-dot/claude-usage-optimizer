@@ -7,12 +7,66 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<header>
+  <div class="bar">
+    <h1>AI Model Manager</h1>
+    <nav id="tabs">
+      <a href="#overview" data-page="overview">Overview</a>
+      <a href="#context" data-page="context">Context</a>
+    </nav>
+    <span id="status" class="muted">Loading…</span>
+  </div>
+  <div class="filters" id="period" role="group" aria-label="Period">
+    <button data-days="1">24 h</button>
+    <button data-days="7">7 days</button>
+    <button data-days="30">30 days</button>
+    <button data-days="all">All</button>
+  </div>
+</header>
 <main>
-  <h1>AI Model Manager</h1>
-  <p id="status">Loading…</p>
-  <pre id="overview"></pre>
-  <p class="note">Placeholder page: the API is live, the charts come with the next step.</p>
+  <p id="error" class="error" hidden></p>
+
+  <section id="page-overview" hidden>
+    <div class="tiles" id="ov-tiles"></div>
+    <div class="card">
+      <h2>Cost per day</h2>
+      <p class="sub">API-equivalent estimate, UTC days, stacked by model</p>
+      <div class="legend" id="ov-daily-legend"></div>
+      <div class="plot" id="ov-daily"></div>
+      <details><summary>Table</summary><div id="ov-daily-table"></div></details>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h2>Cost by token kind</h2>
+        <p class="sub">Where the money goes inside each request</p>
+        <div id="ov-kinds"></div>
+      </div>
+      <div class="card">
+        <h2>Model mix</h2>
+        <p class="sub">Requests and cost per model</p>
+        <div id="ov-mix"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="page-context" hidden>
+    <div class="tiles" id="cx-tiles"></div>
+    <div class="card">
+      <h2>Cost by context size</h2>
+      <p class="sub">Tokens the model read per request (input + cache). Label: share of cost.</p>
+      <div class="plot" id="cx-hist"></div>
+      <p class="sub" id="cx-hist-note"></p>
+    </div>
+    <div class="card">
+      <h2>Context size per day</h2>
+      <p class="sub">Median and 90th percentile per request, UTC days. Lines skip days without requests.</p>
+      <div class="legend" id="cx-daily-legend"></div>
+      <div class="plot" id="cx-daily"></div>
+      <details><summary>Table</summary><div id="cx-daily-table"></div></details>
+    </div>
+  </section>
 </main>
+<script src="charts.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

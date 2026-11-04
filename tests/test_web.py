@@ -75,7 +75,7 @@ class WebTest(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(o["requests"], 1)
         self.assertAlmostEqual(o["est_cost_usd"], (1000 * 4 + 100 * 20) / 1e6)
-        for name in ("status", "daily", "model-mix", "context", "projects", "sessions", "routes", "categories",
+        for name in ("status", "daily", "model-mix", "context", "context-daily", "projects", "sessions", "routes", "categories",
                      "escalations", "quota", "models", "config", "overview?days=all"):
             status, _ = self.api(name)
             self.assertEqual(status, 200, name)

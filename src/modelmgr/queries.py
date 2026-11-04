@@ -212,6 +212,26 @@ def context_histogram(conn: sqlite3.Connection, days: int | None = 30) -> list[d
     return buckets
 
 
+def context_daily(conn: sqlite3.Connection, days: int | None = 30) -> list[dict[str, Any]]:
+    """Context size per UTC day: median, 90th percentile, and the cost share of requests above 200K."""
+    per: dict[str, dict[str, Any]] = {}
+    for r in _requests(conn, days):
+        c = context_tokens(r)
+        if c is None:
+            continue
+        d = per.setdefault(r["ts"][:10], {"ctx": [], "cost": 0.0, "cost_big": 0.0})
+        d["ctx"].append(c)
+        d["cost"] += r["est_cost_usd"] or 0
+        if c > 200_000:
+            d["cost_big"] += r["est_cost_usd"] or 0
+    out = []
+    for date, d in sorted(per.items()):
+        s = sorted(d["ctx"])
+        out.append({"date": date, "requests": len(s), "median_context": _median(s),
+                    "p90_context": s[min(len(s) - 1, int(len(s) * 0.9))],
+                    "over_200k_cost_share": _r(d["cost_big"] / d["cost"]) if d["cost"] else None})
+    return out
+
 # ---------- projects and sessions ----------
 
 def projects(conn: sqlite3.Connection, days: int | None = 30) -> list[dict[str, Any]]:
