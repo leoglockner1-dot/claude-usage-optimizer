@@ -265,6 +265,11 @@ def cmd_rollback(a) -> int:
     return 0
 
 
+def cmd_dashboard(a) -> int:
+    from . import web
+    return web.serve(port=a.port, open_browser=a.open, auto_ingest=not a.no_ingest)
+
+
 def cmd_doctor(a) -> int:
     ok = True
     def check(label, cond, hint=""):
@@ -341,6 +346,11 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("rollback", help="activate an earlier policy version")
     s.add_argument("version", type=int)
     s.set_defaults(f=cmd_rollback)
+    s = sub.add_parser("dashboard", help="local web dashboard on 127.0.0.1 (ingests every 30 s)")
+    s.add_argument("--port", type=int, default=8765)
+    s.add_argument("--open", action="store_true", help="open it in the browser")
+    s.add_argument("--no-ingest", action="store_true", help="serve the database as it is")
+    s.set_defaults(f=cmd_dashboard)
     sub.add_parser("doctor", help="check installation").set_defaults(f=cmd_doctor)
     a = p.parse_args(argv)
     return a.f(a)
