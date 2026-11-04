@@ -144,27 +144,29 @@
   }
 
   // ---------- horizontal bars (one series) ----------
-  // opts: { rows:[{label, value, note}], fmt, cls }
+  // opts: { rows:[{label, value, note, cls}], fmt, cls, unit (tooltip label, default "cost"), empty }
   function hbars(container, opts) {
     container.replaceChildren();
+    if (!opts.rows.length && opts.empty) { html("p", "muted", container, opts.empty); return; }
     const max = Math.max(0, ...opts.rows.map((r) => r.value || 0)) || 1;
     const list = html("div", "hbars", container);
     for (const r of opts.rows) {
       const row = html("div", "hbar", list);
       html("span", "hbar-label", row, r.label);
       const track = html("span", "hbar-track", row);
-      const bar = html("span", `hbar-fill ${opts.cls || "s1"}`, track);
+      const bar = html("span", `hbar-fill ${r.cls || opts.cls || "s1"}`, track);
       bar.style.width = `${((r.value || 0) / max) * 100}%`;
       html("span", "hbar-value", row, opts.fmt(r.value));
       row.addEventListener("mousemove", (e) => showTip(e, r.label,
-        [{ value: opts.fmt(r.value), label: "cost" }, ...(r.note ? [{ value: r.note, label: "" }] : [])]));
+        [{ value: opts.fmt(r.value), label: opts.unit || "cost" }, ...(r.note ? [{ value: r.note, label: "" }] : [])]));
       row.addEventListener("mouseleave", hideTip);
     }
   }
 
   // ---------- lines (shared y axis, same unit) ----------
   // opts: { labels, series:[{name, cls, values:[]}], fmt, tickFmt, title(i), height, aria,
-  //         bridge (draw across nulls: for days with no data rather than unmeasured ones) }
+  //         bridge (draw across nulls: for days with no data rather than unmeasured ones),
+  //         x:[number] (uneven positions, e.g. timestamps) with xTicks:[{x, label}], max (fixed y top) }
   function lines(container, opts) {
     const H = opts.height || 220;
     const { root, width } = frame(container, H);
@@ -172,11 +174,13 @@
     const m = { l: 52, r: 16, t: 12, b: 26 };
     const plotW = width - m.l - m.r, plotH = H - m.t - m.b;
     const all = opts.series.flatMap((s) => s.values.filter((v) => v != null));
-    const { max, step } = niceMax(Math.max(0, ...all));
+    const { max, step } = opts.max ? { max: opts.max, step: opts.max / 4 } : niceMax(Math.max(0, ...all));
     const g = svg("g", {}, root);
     yAxis(g, { left: m.l, right: width - m.r, top: m.t, h: plotH, max, step, fmt: opts.tickFmt || opts.fmt });
     const n = opts.labels.length;
-    const xOf = (i) => (n === 1 ? m.l + plotW / 2 : m.l + (plotW * i) / (n - 1));
+    const x0 = opts.x ? opts.x[0] : 0, span = opts.x ? opts.x[n - 1] - x0 : n - 1;
+    const pos = (x) => (span > 0 ? m.l + (plotW * (x - x0)) / span : m.l + plotW / 2);
+    const xOf = (i) => pos(opts.x ? opts.x[i] : i);
     const yOf = (v) => m.t + plotH - (v / max) * plotH;
     for (const s of opts.series) {
       let d = "", pen = false;
@@ -189,13 +193,18 @@
       const last = s.values.map((v, i) => [v, i]).filter(([v]) => v != null).pop();
       if (last) svg("circle", { cx: xOf(last[1]), cy: yOf(last[0]), r: 4, class: `dot ${s.cls}` }, g);
     }
-    xLabels(g, opts.labels, xOf, H - 8, plotW);
+    if (opts.xTicks) {
+      for (const t of opts.xTicks) {
+        svg("text", { x: pos(t.x), y: H - 8, class: "tick", "text-anchor": "middle" }, g).textContent = t.label;
+      }
+    } else xLabels(g, opts.labels, xOf, H - 8, plotW);
     const cross = svg("line", { y1: m.t, y2: m.t + plotH, class: "crosshair", visibility: "hidden" }, root);
-    const hit = svg("rect", { x: m.l, y: m.t, width: plotW, height: plotH, class: "hit" }, root);
+    const hit = svg("rect", { x: m.l, y: m.t, width: plotW, height: plotH, class: "hit plot-hit" }, root);
     hit.addEventListener("mousemove", (e) => {
       const box = root.getBoundingClientRect();
       const px = ((e.clientX - box.left) / box.width) * width;
-      const i = n === 1 ? 0 : Math.max(0, Math.min(n - 1, Math.round(((px - m.l) / plotW) * (n - 1))));
+      let i = 0; // nearest point by position (positions may be uneven)
+      for (let j = 1; j < n; j++) if (Math.abs(xOf(j) - px) < Math.abs(xOf(i) - px)) i = j;
       cross.setAttribute("x1", xOf(i));
       cross.setAttribute("x2", xOf(i));
       cross.setAttribute("visibility", "visible");
@@ -214,16 +223,24 @@
     }
   }
 
-  // columns: [{label, value(row) -> string, num}]
-  function table(container, cols, rows) {
+  // columns: [{label, value(row) -> string, num, href(row) -> "#..." link, key(row) -> colour class,
+  //            wide (long text, may wrap)}]; empty: text shown when there are no rows
+  function table(container, cols, rows, empty) {
     container.replaceChildren();
+    if (!rows.length && empty) { html("p", "muted", container, empty); return; }
     const t = html("table", "data", container);
     const head = html("tr", null, html("thead", null, t));
     for (const c of cols) html("th", c.num ? "num" : null, head, c.label);
     const body = html("tbody", null, t);
     for (const r of rows) {
       const tr = html("tr", null, body);
-      for (const c of cols) html("td", c.num ? "num" : null, tr, c.value(r));
+      for (const c of cols) {
+        const td = html("td", c.num ? "num" : c.wide ? "wide" : null, tr);
+        if (c.key) html("span", `key ${c.key(r)}`, td);
+        const href = c.href && c.href(r);
+        if (href) html("a", null, td, c.value(r)).href = href;
+        else td.append(c.value(r));
+      }
     }
   }
 

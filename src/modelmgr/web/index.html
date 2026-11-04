@@ -13,6 +13,10 @@
     <nav id="tabs">
       <a href="#overview" data-page="overview">Overview</a>
       <a href="#context" data-page="context">Context</a>
+      <a href="#projects" data-page="projects">Projects</a>
+      <a href="#routing" data-page="routing">Routing</a>
+      <a href="#quota" data-page="quota">Quota</a>
+      <a href="#models" data-page="models">Models</a>
     </nav>
     <span id="status" class="muted">Loading…</span>
   </div>
@@ -63,6 +67,100 @@
       <div class="legend" id="cx-daily-legend"></div>
       <div class="plot" id="cx-daily"></div>
       <details><summary>Table</summary><div id="cx-daily-table"></div></details>
+    </div>
+  </section>
+
+  <section id="page-projects" hidden>
+    <div class="card">
+      <h2>Cost by project</h2>
+      <p class="sub">Project is the last folder of the session's working directory</p>
+      <div id="pj-bars"></div>
+    </div>
+    <div class="card">
+      <h2>Projects</h2>
+      <p class="sub">Click a project to filter the sessions below</p>
+      <div id="pj-table"></div>
+    </div>
+    <div class="card">
+      <h2 id="pj-sessions-title">Sessions</h2>
+      <p class="sub" id="pj-sessions-sub">Newest first. Click a session for its request timeline.</p>
+      <div id="pj-sessions"></div>
+    </div>
+  </section>
+
+  <section id="page-session" hidden>
+    <p><a href="#projects" id="ss-back">← Projects</a></p>
+    <h2 id="ss-title"></h2>
+    <p class="sub" id="ss-sub"></p>
+    <div class="tiles" id="ss-tiles"></div>
+    <div class="card">
+      <h2>Context per request</h2>
+      <p class="sub">Tokens the model read per request, over time. A drop is a compaction or a new conversation branch.</p>
+      <div class="plot" id="ss-context"></div>
+    </div>
+    <div class="card">
+      <h2>Cumulative cost</h2>
+      <p class="sub">API-equivalent estimate, over time</p>
+      <div class="plot" id="ss-cost"></div>
+    </div>
+    <div class="card">
+      <h2>Models in this session</h2>
+      <div id="ss-models"></div>
+      <details><summary>All requests</summary><div id="ss-table"></div></details>
+    </div>
+  </section>
+
+  <section id="page-routing" hidden>
+    <div class="tiles" id="rt-tiles"></div>
+    <div class="grid2">
+      <div class="card">
+        <h2>Tasks by category</h2>
+        <p class="sub">How the classifier labelled each task</p>
+        <div id="rt-cats"></div>
+      </div>
+      <div class="card">
+        <h2>Chosen model</h2>
+        <p class="sub">What the router picked per turn, applied or not</p>
+        <div id="rt-chosen"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Categories</h2>
+      <p class="sub">Confidence is the classifier's own score, 0–1</p>
+      <div id="rt-cat-table"></div>
+    </div>
+    <div class="card">
+      <h2>Routing log</h2>
+      <p class="sub" id="rt-log-sub">Newest first</p>
+      <div id="rt-log"></div>
+    </div>
+    <div class="card">
+      <h2>Escalations</h2>
+      <div id="rt-esc"></div>
+    </div>
+  </section>
+
+  <section id="page-quota" hidden>
+    <div class="tiles" id="qt-tiles"></div>
+    <div class="card">
+      <h2>Plan usage over time</h2>
+      <p class="sub">Percent of the 5-hour and 7-day limits, recorded at each turn. Only since the mod runs.</p>
+      <div class="legend" id="qt-legend"></div>
+      <div class="plot" id="qt-chart"></div>
+      <details><summary>Table</summary><div id="qt-table"></div></details>
+    </div>
+  </section>
+
+  <section id="page-models" hidden>
+    <div class="card">
+      <h2>Model registry</h2>
+      <p class="sub">Models the router can choose. Auto: allowed for automatic routing.</p>
+      <div id="md-models"></div>
+    </div>
+    <div class="card">
+      <h2>Prices</h2>
+      <p class="sub">USD per million tokens, used for every API-equivalent estimate</p>
+      <div id="md-prices"></div>
     </div>
   </section>
 </main>
