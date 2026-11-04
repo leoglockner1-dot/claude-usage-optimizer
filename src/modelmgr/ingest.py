@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 from typing import Any, Iterable
 
-from . import db, paths, registry
+from . import db, paths, queries, registry
 
 MIN_AGE_S = 2.0
 KEEP_DONE_DAYS = 14
@@ -174,6 +174,10 @@ def run(conn: sqlite3.Connection | None = None, min_age_s: float = MIN_AGE_S) ->
     for f in paths.spool_done_dir().glob("*.json"):
         if f.stat().st_mtime < cutoff:
             f.unlink()
+    try:
+        queries.write_summary(conn)
+    except (OSError, sqlite3.Error):
+        pass  # the summary is a convenience for the pane; ingest must never fail because of it
     if own:
         conn.close()
     return stats

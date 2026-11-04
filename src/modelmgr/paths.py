@@ -30,6 +30,10 @@ def policy_path() -> Path:
     return home() / "policy.json"
 
 
+def summary_path() -> Path:
+    return home() / "summary.json"
+
+
 def policies_dir() -> Path:
     return home() / "policies"
 

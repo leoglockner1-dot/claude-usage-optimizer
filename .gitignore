@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 .venv/
 plugin/.claude-plugin/types/
+.DS_Store
