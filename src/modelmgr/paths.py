@@ -34,6 +34,11 @@ def summary_path() -> Path:
     return home() / "summary.json"
 
 
+def dashboard_path() -> Path:
+    """Written while `model-manager dashboard` runs: its token URL, read by the mod's pane."""
+    return home() / "dashboard.json"
+
+
 def policies_dir() -> Path:
     return home() / "policies"
 

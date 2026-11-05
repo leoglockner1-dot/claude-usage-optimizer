@@ -8,10 +8,14 @@ config writes come with the settings page.
 
 from __future__ import annotations
 
+import errno
 import json
 import mimetypes
+import os
 import secrets
+import signal
 import sqlite3
+import sys
 import threading
 from http import HTTPStatus
 from http.cookies import SimpleCookie
@@ -137,11 +141,11 @@ class DashboardServer(ThreadingHTTPServer):
     daemon_threads = True
 
     def __init__(self, port: int = DEFAULT_PORT, token: str | None = None, db_path: Path | None = None):
+        self._stop = threading.Event()  # before bind: a failed bind calls server_close()
         super().__init__(("127.0.0.1", port), Handler)
         self.token = token or secrets.token_urlsafe(24)
         self.db_path = db_path
         self.state: dict[str, Any] = {}
-        self._stop = threading.Event()
 
     @property
     def port(self) -> int:
@@ -282,8 +286,44 @@ class Handler(BaseHTTPRequestHandler):
         self._send(HTTPStatus.OK, target.read_bytes(), ctype)
 
 
+def write_handle(srv: DashboardServer) -> Path:
+    """Tells the mod where the running dashboard is. Owner-only: the URL carries the token."""
+    path = paths.dashboard_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump({"url": srv.url(), "port": srv.port, "pid": os.getpid()}, f)
+    os.replace(tmp, path)
+    return path
+
+
+def remove_handle() -> None:
+    """Removes dashboard.json unless a newer dashboard process has replaced it."""
+    path = paths.dashboard_path()
+    try:
+        if json.loads(path.read_text()).get("pid") == os.getpid():
+            path.unlink()
+    except (OSError, ValueError):
+        pass
+
+
 def serve(port: int = DEFAULT_PORT, open_browser: bool = False, auto_ingest: bool = True) -> int:
-    srv = DashboardServer(port)
+    try:
+        srv = DashboardServer(port)
+    except OSError as e:
+        if e.errno != errno.EADDRINUSE:
+            raise
+        print(f"Port {port} is in use: a dashboard may already run. Use its URL from "
+              f"{paths.dashboard_path()}, stop it, or pick another: model-manager dashboard --port {port + 1}",
+              file=sys.stderr)
+        return 1
+    # a closed terminal (SIGHUP) or kill (SIGTERM) must still remove dashboard.json, else the pane links a dead URL
+    def _stop(signum, frame):
+        raise KeyboardInterrupt
+    for sig in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sig, _stop)
+    write_handle(srv)
     if auto_ingest:
         srv.start_ingest_loop()
     print(f"AI Model Manager dashboard: {srv.url()}", flush=True)
@@ -296,5 +336,6 @@ def serve(port: int = DEFAULT_PORT, open_browser: bool = False, auto_ingest: boo
     except KeyboardInterrupt:
         pass
     finally:
+        remove_handle()
         srv.server_close()
     return 0

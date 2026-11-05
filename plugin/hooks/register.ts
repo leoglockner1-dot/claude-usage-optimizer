@@ -5,6 +5,9 @@
 
 import { classify, parseOverride, type Classification } from './classify'
 import { aliasOf, decide, type CacheMark, type Config, type Decision, type Policy } from './route'
+import { atom, read, update } from 'claude-code'
+import type { Summary, View } from '../types'
+import { drawPane, PANE_ID, statusLine } from './pane'
 
 type Task = {
   id: string
@@ -71,6 +74,20 @@ let testRes: RegExp[] = []
 let shellTurn = false // the next turn answers a `!` shell command typed by the user
 const SHELL_ECHO = /^\s*<(bash-input|bash-stdout|bash-stderr|local-command-stdout)>/
 let buildRes: RegExp[] = []
+// pane / status line inputs (the drawing reads only the view atom)
+let sessionRequests = 0
+let session: View['session'] = { requests: 0, costUsd: null, contextTokens: null, contextWindow: null }
+let fiveHourResets: string | null = null
+let summary: Summary | null = null
+let dashboardUrl: string | null = null
+
+const EMPTY_VIEW: View = {
+  mode: 'observe', disabled: false, route: null, task: null,
+  session: { requests: 0, costUsd: null, contextTokens: null, contextWindow: null },
+  quota: { fiveHour: null, sevenDay: null, fiveHourResets: null }, summary: null, dashboardUrl: null,
+}
+// bump the tag when View changes: a value stored by an older version then reads as absent
+const viewAtom = atom({ plugin: 'model-manager', key: 'view' } as const, EMPTY_VIEW, { shape: 'view-1' })
 
 function ts(): string { return new Date().toISOString() }
 function rid(): string { return crypto.randomUUID().slice(0, 12) }
@@ -125,9 +142,50 @@ function closeTask(reason: string) {
 function quotaFrom(usage: any) {
   for (const r of usage?.rateLimits ?? []) {
     const k = String(r.kind ?? '')
-    if (/five|5h|session/i.test(k)) quota.fiveHour = r.percentUsed
+    if (/five|5h|session/i.test(k)) { quota.fiveHour = r.percentUsed; fiveHourResets = r.resetsAt ?? null }
     else if (/seven|7d|week/i.test(k)) quota.sevenDay = r.percentUsed
   }
+}
+
+function sessionFrom(usage: any) {
+  session = {
+    requests: sessionRequests,
+    costUsd: usage?.cost?.usd ?? session.costUsd,
+    contextTokens: usage?.context?.tokens ?? session.contextTokens,
+    contextWindow: usage?.context?.window ?? session.contextWindow,
+  }
+}
+
+// summary.json is written by the core at the end of every ingest; dashboard.json while `model-manager dashboard` runs
+async function readSummary($: any) {
+  const s = await readJson($, `${home}/.model-manager/summary.json`)
+  summary = s && Array.isArray(s.daily) && s.week ? s : null
+  const d = await readJson($, `${home}/.model-manager/dashboard.json`)
+  dashboardUrl = typeof d?.url === 'string' ? d.url : null
+  // dashboard.json outlives a killed server: trust it only while its pid runs
+  if (dashboardUrl && Number.isInteger(d?.pid)) {
+    try { if ((await $.process.run(['kill', '-0', String(d.pid)])).exitCode !== 0) dashboardUrl = null } catch {}
+  }
+}
+
+function snapshot(): View {
+  const d = lastDecision
+  return {
+    mode: cfg.mode, disabled,
+    route: d ? { model: d.model, effort: d.effort, reason: d.reason, applied: d.apply,
+                 category: task?.cls.category ?? null, complexity: task?.cls.complexity ?? null } : null,
+    task: task ? { category: task.cls.category, complexity: task.cls.complexity, pinned: task.override?.model ?? null } : null,
+    session: { ...session, requests: sessionRequests },
+    quota: { fiveHour: quota.fiveHour ?? null, sevenDay: quota.sevenDay ?? null, fiveHourResets },
+    summary, dashboardUrl,
+  }
+}
+
+// redraws the pane and the status line; never call from a ui.render hook
+async function publish($: any) {
+  const v = snapshot()
+  try { await update($, viewAtom, () => v) } catch {}
+  try { $.ui.status(statusLine(v)) } catch {}
 }
 
 function status(): string {
@@ -142,6 +200,36 @@ async function writeConfig($: any, patch: Record<string, any>) {
   const c = (await readJson($, `${home}/.model-manager/config.json`)) ?? {}
   await $.fs.write(`${home}/.model-manager/config.json`, JSON.stringify({ ...c, ...patch }, null, 2) + '\n')
   await reload($)
+}
+
+async function grade($: any, kind: 'good' | 'bad', note: string | null): Promise<string> {
+  if (!task) return 'No open task to grade.'
+  task.feedback = kind
+  emit({ type: 'feedback', task_id: task.id, kind, note })
+  if (kind === 'bad') { task.window.push({ signals: ['user_bad'], score: WEIGHT.strong }); maybeEscalate($, 'feedback') }
+  await flush($)
+  return `Recorded: ${kind}.`
+}
+
+function pin(model: string, effort?: string): string {
+  if (!task) return 'No open task to pin.'
+  task.override = { model, effort }
+  return `Current task pinned to ${model}${effort ? '·' + effort : ''}.`
+}
+
+async function openDashboard($: any) {
+  await readSummary($)
+  if (!dashboardUrl) { $.ui.toast('Dashboard not running. Start it with: model-manager dashboard --open'); return }
+  try { await $.process.run(['open', dashboardUrl]) } catch { $.ui.toast(`Open ${dashboardUrl}`) }
+}
+
+function paneActions($: any) {
+  return {
+    setMode: (m: string) => { void writeConfig($, { mode: m }).then(() => publish($)) },
+    grade: (k: 'good' | 'bad') => { void grade($, k, null).then(t => { $.ui.toast(t); return publish($) }) },
+    pin: (m: string) => { $.ui.toast(pin(m)); void publish($) },
+    openDashboard: () => { void openDashboard($) },
+  }
 }
 
 function maybeEscalate($: any, where: string) {
@@ -178,9 +266,12 @@ export function register(on: any) {
     try { const v: any = await $.session.version(); version = typeof v === 'string' ? v : String(v?.version ?? '') } catch {}
     emit({ type: 'session', cwd, cc_version: version, model, project: cwd.split('/').pop() })
     await flush($)
-    $.clock.every(30_000, async () => { await flush($) })
+    await readSummary($)
+    try { const u = await $.session.usage(); quotaFrom(u); sessionFrom(u) } catch {}
+    await publish($)
+    $.clock.every(30_000, async () => { await flush($); await readSummary($); await publish($) })
     try {
-      await $.command.register({ name: 'mm', description: 'AI Model Manager: status, mode, good/bad, use <model>, why, off/on', argumentHint: '[status|mode <m>|good|bad|use <model[:effort]>|why|off|on]', immediate: true })
+      await $.command.register({ name: 'mm', description: 'AI Model Manager: pane, status, mode, good/bad, use <model>, why, off/on', argumentHint: '[pane|status|mode <m>|good|bad|use <model[:effort]>|why|off|on]', immediate: true })
     } catch {}
     return next(e)
   })
@@ -249,11 +340,13 @@ export function register(on: any) {
                session_model: e.model, chosen_model: d.model, chosen_effort: d.effort, applied: d.apply,
                reason: d.reason, candidates: d.candidates })
         if (d.apply && aliasOf(e.model, policy) !== d.model) $.ui.log(`model → ${d.model}·${d.effort} (${task.cls.category}) · ${d.reason}`)
+        await publish($)
       }
       const d = turnDecision.d
       if (d.apply) sent = { ...e, model: policy.model_ids[d.model] ?? d.model, effort: d.effort }
     }
     const r = yield* next(sent)
+    sessionRequests++
     const answered = aliasOf(r?.usage?.model ?? sent.model, policy)
     marks[answered] = { at: Date.now(), messageCount: e.messageCount ?? 0 }
     emit({ type: 'request', request_key: `${e.turnId}:${e.agentId ?? 'main'}:${e.index}`, task_id: task?.id ?? null,
@@ -306,7 +399,7 @@ export function register(on: any) {
              duration_ms: e.durationMs, aborted: e.isAborted })
       return next(e)
     }
-    try { quotaFrom(await $.session.usage()) } catch {}
+    try { const u = await $.session.usage(); quotaFrom(u); sessionFrom(u) } catch {}
     const t = turn
     if (task && t) {
       task.turns++
@@ -329,6 +422,7 @@ export function register(on: any) {
     turn = null
     shellTurn = false
     await flush($)
+    await publish($)
     return next(e)
   })
 
@@ -354,44 +448,53 @@ export function register(on: any) {
     return next({ ...e, props: { ...e.props, suffix: (e.props?.suffix ?? '') + tag } })
   })
 
+  on('ui.render', { component: 'Pane', requestId: PANE_ID }, async ($: any, e: any) => {
+    const v = await read($, viewAtom)
+    return drawPane($, e, v, paneActions($), Date.now())
+  })
+
   on('command.run', { command: 'mm' }, async ($: any, e: any) => {
     await reload($)
     const [sub, ...rest] = String(e.args ?? '').trim().split(/\s+/)
     const arg = rest.join(' ')
-    switch ((sub || 'status').toLowerCase()) {
-      case 'status': return { text: status() }
-      case 'why': return { text: lastDecision ? `${lastDecision.model}·${lastDecision.effort}: ${lastDecision.reason}\n${JSON.stringify(lastDecision.candidates)}` : 'No routing decision yet in this session.' }
-      case 'mode': {
-        const m = rest[0]
-        if (!['observe', 'auto', 'balanced', 'quality', 'cost', 'manual', 'off'].includes(m)) return { text: 'Usage: /mm mode observe|auto|balanced|quality|cost|manual|off' }
-        await writeConfig($, { mode: m })
-        return { text: `Mode set to ${m}.` }
-      }
-      case 'good': case 'bad': {
-        if (!task) return { text: 'No open task to grade.' }
-        task.feedback = sub.toLowerCase() as 'good' | 'bad'
-        emit({ type: 'feedback', task_id: task.id, kind: task.feedback, note: arg || null })
-        if (task.feedback === 'bad') { task.window.push({ signals: ['user_bad'], score: WEIGHT.strong }); maybeEscalate($, 'feedback') }
-        await flush($)
-        return { text: `Recorded: ${task.feedback}.` }
-      }
-      case 'use': {
-        const m = /^(haiku|sonnet|opus|fable)(?::(low|medium|high|xhigh|max))?$/i.exec(arg)
-        if (!m || !task) return { text: 'Usage: /mm use haiku|sonnet|opus|fable[:effort]  (applies to the current task)' }
-        task.override = { model: m[1].toLowerCase(), effort: m[2]?.toLowerCase() }
-        return { text: `Current task pinned to ${task.override.model}${task.override.effort ? '·' + task.override.effort : ''}.` }
-      }
-      case 'off': {
-        await $.fs.write(`${home}/.model-manager/DISABLED`, ts() + '\n')
-        disabled = true
-        return { text: 'Model Manager off (kill switch). Run /mm on to re-enable.' }
-      }
-      case 'on': {
-        try { await $.process.run(['rm', '-f', `${home}/.model-manager/DISABLED`]) } catch {}
-        await reload($)
-        return { text: `Model Manager on · mode ${cfg.mode}.` }
-      }
-      default: return { text: 'Usage: /mm [status|mode <m>|good|bad|use <model[:effort]>|why|off|on]' }
-    }
+    const out = await mmCommand($, (sub || 'status').toLowerCase(), rest, arg)
+    await publish($)
+    return out
   })
+}
+
+async function mmCommand($: any, sub: string, rest: string[], arg: string): Promise<{ text: string }> {
+  switch (sub) {
+    case 'pane': {
+      await readSummary($)
+      await publish($)
+      const r: any = await $.ui.open({ id: PANE_ID, title: 'Model Manager' })
+      return { text: r?.isPlaced === false ? 'Pane opened, but no surface shows panes here. Try /mm status.' : 'Model Manager pane opened.' }
+    }
+    case 'status': return { text: status() }
+    case 'why': return { text: lastDecision ? `${lastDecision.model}·${lastDecision.effort}: ${lastDecision.reason}\n${JSON.stringify(lastDecision.candidates)}` : 'No routing decision yet in this session.' }
+    case 'mode': {
+      const m = rest[0]
+      if (!['observe', 'auto', 'balanced', 'quality', 'cost', 'manual', 'off'].includes(m)) return { text: 'Usage: /mm mode observe|auto|balanced|quality|cost|manual|off' }
+      await writeConfig($, { mode: m })
+      return { text: `Mode set to ${m}.` }
+    }
+    case 'good': case 'bad': return { text: await grade($, sub as 'good' | 'bad', arg || null) }
+    case 'use': {
+      const m = /^(haiku|sonnet|opus|fable)(?::(low|medium|high|xhigh|max))?$/i.exec(arg)
+      if (!m || !task) return { text: 'Usage: /mm use haiku|sonnet|opus|fable[:effort]  (applies to the current task)' }
+      return { text: pin(m[1].toLowerCase(), m[2]?.toLowerCase()) }
+    }
+    case 'off': {
+      await $.fs.write(`${home}/.model-manager/DISABLED`, ts() + '\n')
+      disabled = true
+      return { text: 'Model Manager off (kill switch). Run /mm on to re-enable.' }
+    }
+    case 'on': {
+      try { await $.process.run(['rm', '-f', `${home}/.model-manager/DISABLED`]) } catch {}
+      await reload($)
+      return { text: `Model Manager on · mode ${cfg.mode}.` }
+    }
+    default: return { text: 'Usage: /mm [pane|status|mode <m>|good|bad|use <model[:effort]>|why|off|on]' }
+  }
 }

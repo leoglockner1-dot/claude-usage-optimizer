@@ -111,6 +111,56 @@ class WebTest(unittest.TestCase):
         self.assertEqual(s["mode"], "observe")
         self.assertIsNotNone(s["last_ingest"])
 
+    def test_handle_file_for_the_pane(self):
+        from modelmgr import paths, web
+        path = web.write_handle(self.srv)
+        self.assertEqual(path, paths.dashboard_path())
+        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        h = json.loads(path.read_text())
+        self.assertEqual(h["url"], self.srv.url())
+        self.assertIn("t0ken", h["url"])
+        self.assertEqual(h["pid"], os.getpid())
+        h["pid"] = -1  # another dashboard took over: its file stays
+        path.write_text(json.dumps(h))
+        web.remove_handle()
+        self.assertTrue(path.exists())
+        web.write_handle(self.srv)
+        web.remove_handle()
+        self.assertFalse(path.exists())
+
+    def test_hangup_removes_the_handle(self):
+        # a closed terminal sends SIGHUP: the server must still clean up dashboard.json
+        import signal
+        import subprocess
+        import sys
+        import time
+        from modelmgr import paths
+        src = str(Path(__file__).resolve().parents[1] / "src")
+        env = {**os.environ, "PYTHONPATH": src}
+        proc = subprocess.Popen([sys.executable, "-c",
+                                 "from modelmgr import web; web.serve(port=0, auto_ingest=False)"],
+                                env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            for _ in range(100):
+                if paths.dashboard_path().exists():
+                    break
+                time.sleep(0.05)
+            self.assertTrue(paths.dashboard_path().exists())
+            proc.send_signal(signal.SIGHUP)
+            proc.wait(timeout=5)
+            self.assertFalse(paths.dashboard_path().exists())
+        finally:
+            proc.kill()
+
+    def test_port_in_use_is_a_message(self):
+        import contextlib
+        import io
+        from modelmgr import web
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            self.assertEqual(web.serve(port=self.srv.port, auto_ingest=False), 1)
+        self.assertIn("in use", err.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()
