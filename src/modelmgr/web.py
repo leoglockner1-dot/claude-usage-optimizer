@@ -2,8 +2,8 @@
 
 Binds to 127.0.0.1 only. A random token is created per start; the URL printed by the CLI carries
 it once, the server swaps it for a SameSite=Strict cookie, and every API call needs that cookie or
-the X-MM-Token header. The Host header must name this server (blocks DNS rebinding). Read-only:
-config writes come with the settings page.
+the X-MM-Token header. The Host header must name this server (blocks DNS rebinding). Writes are
+POST /api/config and /api/killswitch only: JSON bodies, same Origin, validated like the CLI.
 """
 
 from __future__ import annotations
@@ -31,6 +31,7 @@ INGEST_EVERY_S = 30.0
 STATIC_DIR = Path(__file__).parent / "web"
 COOKIE = "mm_token"
 MAX_DAYS = 3650
+MAX_BODY = 16 * 1024
 
 _SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
@@ -104,10 +105,38 @@ def api_models(conn, qs, parts, state) -> list[dict[str, Any]]:
 
 
 def api_config(conn, qs, parts, state) -> dict[str, Any]:
-    cfg = config.load()
+    return _public_config(config.load())
+
+
+def _public_config(cfg: dict[str, Any]) -> dict[str, Any]:
+    cfg = dict(cfg)
     cfg.pop("test_patterns", None)
     cfg.pop("build_patterns", None)
     return cfg
+
+
+# ---------- writes: (parsed JSON body) -> JSON value ----------
+
+def post_config(body: Any) -> dict[str, Any]:
+    try:
+        return _public_config(config.apply_patch(body))
+    except ValueError as exc:
+        raise BadRequest(str(exc)) from None
+
+
+def post_killswitch(body: Any) -> dict[str, Any]:
+    if not isinstance(body, dict) or not isinstance(body.get("disabled"), bool):
+        raise BadRequest('send {"disabled": true} or {"disabled": false}')
+    flag = paths.disabled_flag()
+    if body["disabled"]:
+        paths.ensure()
+        flag.write_text(db.now_iso() + "\n")
+    elif flag.exists():
+        flag.unlink()
+    return {"disabled": flag.exists()}
+
+
+POSTS: dict[str, Callable[[Any], Any]] = {"config": post_config, "killswitch": post_killswitch}
 
 
 def api_session(conn, qs, parts, state) -> list[dict[str, Any]]:
@@ -253,9 +282,41 @@ class Handler(BaseHTTPRequestHandler):
         return self._static(url.path)
 
     def do_POST(self) -> None:
-        self._error(HTTPStatus.METHOD_NOT_ALLOWED, "read-only")
+        if self.headers.get("Host") not in self.server.allowed_hosts():
+            return self._error(HTTPStatus.FORBIDDEN, "unexpected Host header")
+        # a page on another origin can send a cookie-less form post; it cannot set this Origin or a JSON type
+        if self.headers.get("Origin") not in {f"http://{h}" for h in self.server.allowed_hosts()}:
+            return self._error(HTTPStatus.FORBIDDEN, "writes need the dashboard's own Origin")
+        if not self._authorized():
+            return self._error(HTTPStatus.FORBIDDEN, "open the dashboard with the URL printed by 'model-manager dashboard'")
+        if (self.headers.get("Content-Type") or "").split(";")[0].strip() != "application/json":
+            return self._error(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, "send application/json")
+        path = urlsplit(self.path).path
+        fn = POSTS.get(path[len("/api/"):]) if path.startswith("/api/") else None
+        if fn is None:
+            return self._error(HTTPStatus.METHOD_NOT_ALLOWED, "this endpoint is read-only")
+        try:
+            n = int(self.headers.get("Content-Length") or "0")
+        except ValueError:
+            n = -1
+        if not 0 < n <= MAX_BODY:
+            return self._error(HTTPStatus.BAD_REQUEST, f"body must be 1 to {MAX_BODY} bytes")
+        try:
+            body = json.loads(self.rfile.read(n))
+        except (ValueError, UnicodeDecodeError):
+            return self._error(HTTPStatus.BAD_REQUEST, "body is not valid JSON")
+        try:
+            value = fn(body)
+        except BadRequest as exc:
+            return self._error(HTTPStatus.BAD_REQUEST, str(exc))
+        except OSError as exc:
+            return self._error(HTTPStatus.INTERNAL_SERVER_ERROR, f"could not write: {exc.strerror}")
+        self._json(HTTPStatus.OK, value)
 
-    do_PUT = do_DELETE = do_PATCH = do_POST
+    def do_PUT(self) -> None:
+        self._error(HTTPStatus.METHOD_NOT_ALLOWED, "use POST")
+
+    do_DELETE = do_PATCH = do_PUT
 
     def _api(self, path: str, qs: dict[str, list[str]]) -> None:
         name, *parts = path.split("/")

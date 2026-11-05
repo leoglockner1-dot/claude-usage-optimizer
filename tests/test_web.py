@@ -42,6 +42,17 @@ class WebTest(unittest.TestCase):
         c.close()
         return r, body
 
+    def post(self, path, value, headers=None):
+        c = http.client.HTTPConnection("127.0.0.1", self.srv.port, timeout=5)
+        body = value if isinstance(value, bytes) else json.dumps(value).encode()
+        h = {"Host": self.host, "Origin": f"http://{self.host}", "X-MM-Token": "t0ken",
+             "Content-Type": "application/json", **(headers or {})}
+        c.request("POST", f"/api/{path}", body=body, headers={k: v for k, v in h.items() if v is not None})
+        r = c.getresponse()
+        out = json.loads(r.read() or b"null")
+        c.close()
+        return r.status, out
+
     def api(self, path):
         r, body = self.get(f"/api/{path}", {"X-MM-Token": "t0ken"})
         return r.status, json.loads(body)
@@ -91,8 +102,58 @@ class WebTest(unittest.TestCase):
         self.assertEqual(self.api("overview?days=0")[0], 400)
         self.assertEqual(self.api("routes?limit=99999")[0], 400)
         self.assertEqual(self.api("nope")[0], 404)
-        r, _ = self.get("/api/config", {"X-MM-Token": "t0ken"}, method="POST")
+        r, _ = self.get("/api/config", {"X-MM-Token": "t0ken"}, method="PUT")
         self.assertEqual(r.status, 405)
+
+    def test_settings_write_config(self):
+        from modelmgr import config
+        status, cfg = self.post("config", {"mode": "auto", "quota_guard.five_hour": 70, "auto_models": ["haiku", "sonnet"]})
+        self.assertEqual(status, 200, cfg)
+        self.assertEqual((cfg["mode"], cfg["quota_guard"]["five_hour"], cfg["auto_models"]), ("auto", 70, ["haiku", "sonnet"]))
+        self.assertNotIn("test_patterns", cfg)
+        saved = config.load()
+        self.assertEqual(saved["mode"], "auto")
+        self.assertEqual(saved["quota_guard"]["seven_day"], 90)  # siblings of a dotted key stay
+        self.assertTrue(saved["test_patterns"])  # keys the page does not show stay too
+
+    def test_settings_reject_bad_values_and_change_nothing(self):
+        from modelmgr import config
+        before = config.load()
+        for patch, msg in [
+            ({"mode": "turbo"}, "mode must be one of"),
+            ({"auto_models": ["fable"]}, "cannot be routed automatically"),
+            ({"auto_models": []}, "at least one model"),
+            ({"ceiling": "sonnet"}, "above the ceiling"),
+            ({"quota_guard.five_hour": 101}, "from 0 to 100"),
+            ({"escalation.enabled": "yes"}, "true or false"),
+            ({"test_patterns": ["x"]}, "not editable here"),
+            ([], "JSON object"),
+        ]:
+            status, out = self.post("config", patch)
+            self.assertEqual(status, 400, patch)
+            self.assertIn(msg, out["error"], patch)
+        self.assertEqual(config.load(), before)
+
+    def test_writes_need_origin_json_and_token(self):
+        ok = {"mode": "auto"}
+        self.assertEqual(self.post("config", ok, {"Origin": None})[0], 403)
+        self.assertEqual(self.post("config", ok, {"Origin": "http://evil.test"})[0], 403)
+        self.assertEqual(self.post("config", ok, {"X-MM-Token": "wrong"})[0], 403)
+        self.assertEqual(self.post("config", ok, {"Content-Type": "text/plain"})[0], 415)
+        self.assertEqual(self.post("config", b"{nope")[0], 400)
+        self.assertEqual(self.post("config", b"x" * 20000)[0], 400)
+        self.assertEqual(self.post("overview", ok)[0], 405)
+        from modelmgr import config
+        self.assertEqual(config.load()["mode"], "observe")
+
+    def test_kill_switch(self):
+        from modelmgr import paths
+        self.assertEqual(self.post("killswitch", {"disabled": True}), (200, {"disabled": True}))
+        self.assertTrue(paths.disabled_flag().exists())
+        self.assertTrue(self.api("status")[1]["disabled"])
+        self.assertEqual(self.post("killswitch", {"disabled": False}), (200, {"disabled": False}))
+        self.assertFalse(paths.disabled_flag().exists())
+        self.assertEqual(self.post("killswitch", {"disabled": "no"})[0], 400)
 
     def test_static_cannot_escape(self):
         for path in ("/../web.py", "/%2e%2e/web.py", "/missing.css"):

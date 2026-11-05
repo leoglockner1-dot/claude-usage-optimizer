@@ -111,7 +111,40 @@ table.data td.wide { white-space: normal; min-width: 220px; color: var(--ink-2);
 .tip-row strong { font-variant-numeric: tabular-nums; }
 .tip-label { color: var(--muted); }
 
+/* settings form */
+.field { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 4px 16px; padding: 10px 0; border-top: 1px solid var(--grid); }
+.field:first-of-type { border-top: 0; }
+.field-label { font-weight: 600; padding-top: 4px; }
+.field-help { color: var(--muted); font-size: 13px; margin-top: 4px; }
+.field-error { color: var(--error); font-size: 13px; margin-top: 4px; }
+.field.changed .field-label::after { content: " •"; color: var(--s1); }
+.choices { display: flex; flex-wrap: wrap; gap: 6px 16px; padding-top: 4px; }
+.choices label, .check { display: inline-flex; align-items: center; gap: 6px; }
+select, input[type="number"] {
+  font: inherit; color: var(--ink); background: var(--page); border: 1px solid var(--axis);
+  border-radius: 6px; padding: 4px 8px; min-height: 30px;
+}
+input[type="number"] { width: 110px; font-variant-numeric: tabular-nums; }
+.unit { color: var(--ink-2); margin-left: 6px; }
+input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--s1); }
+select:focus-visible, input:focus-visible, button:focus-visible { outline: 2px solid var(--s1); outline-offset: 1px; }
+button.primary, .savebar button, .kill button {
+  font: inherit; font-size: 13px; border-radius: 6px; padding: 6px 14px; cursor: pointer;
+  border: 1px solid var(--axis); background: var(--surface); color: var(--ink);
+}
+button.primary { background: var(--ink); color: var(--page); border-color: var(--ink); font-weight: 600; }
+button:disabled { opacity: 0.45; cursor: default; }
+.savebar { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  padding: 12px 0; background: var(--page); border-top: 1px solid var(--border); }
+#st-msg { font-size: 13px; color: var(--ink-2); }
+#st-msg.error { color: var(--error); }
+.kill { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.kill .state { font-weight: 600; }
+.kill .state.off { color: var(--error); }
+.kill button.danger { color: var(--error); border-color: var(--error); }
+
 @media (max-width: 520px) {
+  .field { grid-template-columns: 1fr; }
   #status { margin-left: 0; width: 100%; }
   .hbar { grid-template-columns: 76px 1fr 56px; }
 }

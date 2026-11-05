@@ -17,6 +17,7 @@
       <a href="#routing" data-page="routing">Routing</a>
       <a href="#quota" data-page="quota">Quota</a>
       <a href="#models" data-page="models">Models</a>
+      <a href="#settings" data-page="settings">Settings</a>
     </nav>
     <span id="status" class="muted">Loading…</span>
   </div>
@@ -162,6 +163,18 @@
       <p class="sub">USD per million tokens, used for every API-equivalent estimate</p>
       <div id="md-prices"></div>
     </div>
+  </section>
+
+  <section id="page-settings" hidden>
+    <div class="card" id="st-kill"></div>
+    <form id="st-form" novalidate>
+      <div id="st-cards"></div>
+      <div class="savebar">
+        <button type="submit" id="st-save" class="primary" disabled>Save changes</button>
+        <button type="button" id="st-discard" disabled>Discard</button>
+        <span id="st-msg" role="status" aria-live="polite"></span>
+      </div>
+    </form>
   </section>
 </main>
 <script src="charts.js"></script>
