@@ -24,6 +24,8 @@ export type Config = {
   haiku_main_max_context: number
   min_switch_saving: number
   quota_guard: { five_hour: number; seven_day: number }
+  // category -> lowest "model:effort" it may get; beats mode shifts, auto_models and the quota guard
+  floors?: Record<string, string>
 }
 
 export type CacheMark = { at: number; messageCount: number }
@@ -129,8 +131,18 @@ export function decide(i: RouteInput): Decision {
     notes.push(`override → ${model}·${effort}`)
   }
 
+  // 4b. category floor (e.g. visual_design → opus·medium). Only an explicit override goes below it.
+  const floor = !i.override?.model ? cfg.floors?.[cls.category] : undefined
+  let floored = false
+  if (floor) {
+    const [fm, fe] = floor.split(':')
+    if (tierOf(model) < tierOf(fm)) { model = fm; effort = fe ?? effort; floored = true }
+    else if (model === fm && fe && EFFORT_RANK[effort] < EFFORT_RANK[fe]) { effort = fe; floored = true }
+    if (floored) notes.push(`floor ${cls.category} → ${model}·${effort}`)
+  }
+
   // 5. guards
-  const capTier = i.override?.model || i.escalationLevel > 0 ? ceilingTier : Math.min(autoMax, ceilingTier)
+  const capTier = i.override?.model || i.escalationLevel > 0 || floor ? ceilingTier : Math.min(autoMax, ceilingTier)
   if (tierOf(model) > capTier) {
     const capped = Object.keys(policy.tiers).filter(m => tierOf(m) <= capTier).sort((a, b) => tierOf(b) - tierOf(a))[0] ?? 'sonnet'
     notes.push(`cap ${model}→${capped}`)
@@ -161,7 +173,7 @@ export function decide(i: RouteInput): Decision {
     }
     const q5 = i.quota.fiveHour ?? 0
     const q7 = i.quota.sevenDay ?? 0
-    if (!downgrade && i.escalationLevel === 0 && !i.override?.model && cls.risk !== 'high' &&
+    if (!downgrade && i.escalationLevel === 0 && !i.override?.model && !floor && cls.risk !== 'high' &&
         (q5 >= cfg.quota_guard.five_hour || q7 >= cfg.quota_guard.seven_day) && tierOf(model) > 2) {
       notes.push(`quota guard (5h ${q5}%, 7d ${q7}%)`)
       model = cur

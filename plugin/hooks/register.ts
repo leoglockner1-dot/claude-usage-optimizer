@@ -50,6 +50,7 @@ const DEFAULT_CFG: Config & Record<string, any> = {
   escalation: { enabled: true, threshold: 1.5, max_auto: 2 },
   quota_guard: { five_hour: 80, seven_day: 90 },
   store_prompts: 'excerpt',
+  floors: { visual_design: 'opus:medium' },
   test_patterns: ['\\bpytest\\b', '\\bnpm (run )?test\\b', '\\bcargo test\\b', '\\bjest\\b', '\\bvitest\\b'],
   build_patterns: ['\\btsc\\b', '\\bnpm run build\\b', '\\bcargo build\\b', '\\bluau-analyze\\b', '\\bselene\\b'],
 }
@@ -112,7 +113,8 @@ async function readJson($: any, path: string): Promise<any> {
 
 async function reload($: any) {
   const c = await readJson($, `${home}/.model-manager/config.json`)
-  cfg = { ...DEFAULT_CFG, ...(c ?? {}), escalation: { ...DEFAULT_CFG.escalation, ...(c?.escalation ?? {}) } }
+  cfg = { ...DEFAULT_CFG, ...(c ?? {}), escalation: { ...DEFAULT_CFG.escalation, ...(c?.escalation ?? {}) },
+    floors: { ...DEFAULT_CFG.floors, ...(c?.floors ?? {}) } }
   policy = await readJson($, `${home}/.model-manager/policy.json`)
   try { disabled = await $.fs.exists(`${home}/.model-manager/DISABLED`) } catch { disabled = false }
   testRes = (cfg.test_patterns as string[]).map(p => new RegExp(p, 'i'))

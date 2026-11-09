@@ -3,7 +3,7 @@
 Binds to 127.0.0.1 only. A random token is created per start; the URL printed by the CLI carries
 it once, the server swaps it for a SameSite=Strict cookie, and every API call needs that cookie or
 the X-MM-Token header. The Host header must name this server (blocks DNS rebinding). Writes are
-POST /api/config and /api/killswitch only: JSON bodies, same Origin, validated like the CLI.
+POST /api/config, /api/killswitch and /api/grade only: JSON bodies, same Origin, validated like the CLI.
 """
 
 from __future__ import annotations
@@ -136,6 +136,30 @@ def post_killswitch(body: Any) -> dict[str, Any]:
     return {"disabled": flag.exists()}
 
 
+def post_grade(body: Any, conn: sqlite3.Connection) -> dict[str, Any]:
+    """{"route_id": 12, "verdict": "too_weak" | ... | null, "better": "opus:medium"?, "note": "..."?}"""
+    if not isinstance(body, dict):
+        raise BadRequest("send a JSON object")
+    rid, verdict = body.get("route_id"), body.get("verdict")
+    if not isinstance(rid, int) or isinstance(rid, bool):
+        raise BadRequest("route_id must be a whole number")
+    if conn.execute("SELECT 1 FROM routes WHERE route_id = ?", (rid,)).fetchone() is None:
+        raise BadRequest(f"no routing decision {rid}")
+    if verdict is not None and verdict not in queries.VERDICTS:
+        raise BadRequest(f"verdict must be one of {', '.join(queries.VERDICTS)} or null")
+    better = body.get("better") or None
+    if better is not None:
+        m, _, e = str(better).partition(":")
+        if m not in {x.alias for x in registry.MODELS} or (e and e not in registry.EFFORTS):
+            raise BadRequest('better must be "model:effort", e.g. "opus:medium"')
+    note = body.get("note") or None
+    if note is not None and (not isinstance(note, str) or len(note) > 500):
+        raise BadRequest("note must be text of at most 500 characters")
+    return queries.grade_route(conn, rid, verdict, better, note)
+
+
+# handlers that take a DB connection as second argument
+POSTS_DB: dict[str, Callable[[Any, sqlite3.Connection], Any]] = {"grade": post_grade}
 POSTS: dict[str, Callable[[Any], Any]] = {"config": post_config, "killswitch": post_killswitch}
 
 
@@ -156,6 +180,7 @@ ROUTES: dict[str, Callable[..., Any]] = {
     "sessions": lambda c, q, p, s: (api_session(c, q, p, s) if p
                                     else queries.sessions(c, _days(q, 30), _limit(q, 200))),
     "routes": lambda c, q, p, s: queries.routes(c, _limit(q, 200)),
+    "grades": lambda c, q, p, s: queries.grade_summary(c),
     "categories": lambda c, q, p, s: queries.categories(c, _days(q, 30)),
     "escalations": lambda c, q, p, s: queries.escalations(c, _limit(q, 100)),
     "quota": lambda c, q, p, s: queries.quota(c, _days(q, 7)),
@@ -292,7 +317,8 @@ class Handler(BaseHTTPRequestHandler):
         if (self.headers.get("Content-Type") or "").split(";")[0].strip() != "application/json":
             return self._error(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, "send application/json")
         path = urlsplit(self.path).path
-        fn = POSTS.get(path[len("/api/"):]) if path.startswith("/api/") else None
+        name = path[len("/api/"):] if path.startswith("/api/") else ""
+        fn = POSTS.get(name) or POSTS_DB.get(name)
         if fn is None:
             return self._error(HTTPStatus.METHOD_NOT_ALLOWED, "this endpoint is read-only")
         try:
@@ -306,7 +332,14 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, UnicodeDecodeError):
             return self._error(HTTPStatus.BAD_REQUEST, "body is not valid JSON")
         try:
-            value = fn(body)
+            if name in POSTS_DB:
+                conn = db.open_db(self.server.db_path)
+                try:
+                    value = fn(body, conn)
+                finally:
+                    conn.close()
+            else:
+                value = fn(body)
         except BadRequest as exc:
             return self._error(HTTPStatus.BAD_REQUEST, str(exc))
         except OSError as exc:

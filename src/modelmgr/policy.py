@@ -29,6 +29,8 @@ PRIOR_TABLE: dict[str, tuple[str, str, str]] = {
     "refactor": ("sonnet:low", "sonnet:medium", "opus:medium"),
     "test": ("haiku:medium", "sonnet:medium", "sonnet:high"),
     "chat": ("haiku:low", "sonnet:low", "sonnet:medium"),
+    # Leo: Sonnet designs are too generic; design work and redesigns always go to Opus
+    "visual_design": ("opus:medium", "opus:medium", "opus:medium"),
 }
 
 LADDER = [
@@ -73,6 +75,21 @@ def prior_policy() -> dict[str, Any]:
         "table": table,
         "changes": [],
     }
+
+
+def add_missing_categories(pol: dict[str, Any]) -> list[str]:
+    """Adds prior cells for categories the policy does not know yet (new classifier categories).
+    Edits pol in place, returns the added category names."""
+    added = []
+    for cat, cells in PRIOR_TABLE.items():
+        if cat in pol.get("table", {}):
+            continue
+        pol.setdefault("table", {})[cat] = {
+            b: {"model": _split(c)[0], "effort": _split(c)[1], "p": PRIOR_P, "n": 0, "source": "prior",
+                "reason": "starting heuristic (no measured data yet)"}
+            for b, c in zip(BANDS, cells)}
+        added.append(cat)
+    return added
 
 
 def active() -> dict[str, Any] | None:

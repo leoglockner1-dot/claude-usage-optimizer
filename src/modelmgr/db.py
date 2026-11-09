@@ -76,6 +76,11 @@ CREATE TABLE IF NOT EXISTS escalations (
 
 CREATE TABLE IF NOT EXISTS feedback (task_id TEXT, ts TEXT, kind TEXT, note TEXT);
 
+-- Leo's verdict on a routing decision, set later in the dashboard. Input for the learning engine.
+CREATE TABLE IF NOT EXISTS route_grades (
+  route_id INTEGER PRIMARY KEY, ts TEXT, verdict TEXT, better TEXT, note TEXT
+);
+
 CREATE TABLE IF NOT EXISTS spawns (
   ts TEXT, session_id TEXT, task_id TEXT, agent_type TEXT,
   requested_model TEXT, chosen_model TEXT, applied INTEGER, reason TEXT

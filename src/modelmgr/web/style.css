@@ -148,3 +148,10 @@ button:disabled { opacity: 0.45; cursor: default; }
   #status { margin-left: 0; width: 100%; }
   .hbar { grid-template-columns: 76px 1fr 56px; }
 }
+
+/* routing log: verdict controls */
+.judge { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-width: 220px; }
+.judge select, .judge input { font: inherit; font-size: 12px; padding: 2px 4px; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--border); border-radius: 4px; }
+.judge input { width: 110px; }
+.judge-status { font-size: 11px; }

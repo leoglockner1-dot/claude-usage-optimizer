@@ -146,6 +146,32 @@ class WebTest(unittest.TestCase):
         from modelmgr import config
         self.assertEqual(config.load()["mode"], "observe")
 
+    def test_grade_a_routing_decision(self):
+        from modelmgr import db
+        conn = db.open_db()
+        with conn:
+            conn.execute("INSERT INTO routes(route_id, task_id, turn_id, ts, chosen_model, chosen_effort, applied)"
+                         " VALUES (7, 't1', 'u1', '2026-11-09T10:00:00+00:00', 'sonnet', 'medium', 1)")
+            conn.execute("INSERT INTO tasks(task_id, category, complexity) VALUES ('t1', 'visual_design', 3)")
+        conn.close()
+        status, out = self.post("grade", {"route_id": 7, "verdict": "too_weak", "better": "opus:medium", "note": "generic"})
+        self.assertEqual(status, 200, out)
+        _, routes = self.api("routes")
+        r = next(x for x in routes if x["route_id"] == 7)
+        self.assertEqual((r["verdict"], r["better"], r["grade_note"]), ("too_weak", "opus:medium", "generic"))
+        _, grades = self.api("grades")
+        self.assertEqual(grades, [{"category": "visual_design", "chosen_model": "sonnet", "verdict": "too_weak", "n": 1}])
+        self.assertEqual(self.post("grade", {"route_id": 7, "verdict": "right"})[0], 200)
+        _, grades = self.api("grades")
+        self.assertEqual([g["verdict"] for g in grades], ["right"])
+        self.assertEqual(self.post("grade", {"route_id": 7, "verdict": None})[0], 200)
+        self.assertEqual(self.api("grades")[1], [])
+        for bad in ({"route_id": 99, "verdict": "right"}, {"route_id": 7, "verdict": "meh"},
+                    {"route_id": 7, "verdict": "right", "better": "gpt:high"}, {"route_id": "7", "verdict": "right"},
+                    {"route_id": 7, "verdict": "right", "note": "x" * 501}):
+            self.assertEqual(self.post("grade", bad)[0], 400, bad)
+        self.assertEqual(self.post("grade", {"route_id": 7, "verdict": "right"}, {"Origin": None})[0], 403)
+
     def test_kill_switch(self):
         from modelmgr import paths
         self.assertEqual(self.post("killswitch", {"disabled": True}), (200, {"disabled": True}))

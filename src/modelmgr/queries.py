@@ -304,12 +304,42 @@ def session_timeline(conn: sqlite3.Connection, session_id: str) -> list[dict[str
 
 def routes(conn: sqlite3.Connection, limit: int = 200) -> list[dict[str, Any]]:
     rows = conn.execute(
-        """SELECT r.ts, r.task_id, r.turn_id, r.agent_id, r.mode, r.policy_version, r.session_model,
+        """SELECT r.route_id, r.ts, r.task_id, r.turn_id, r.agent_id, r.mode, r.policy_version, r.session_model,
                   r.chosen_model, r.chosen_effort, r.applied, r.reason,
-                  t.category, t.complexity, t.risk, t.class_confidence, t.prompt_excerpt, t.user_override, t.outcome
+                  t.category, t.complexity, t.risk, t.class_confidence, t.prompt_excerpt, t.user_override, t.outcome,
+                  g.verdict, g.better, g.note AS grade_note, g.ts AS graded_at
            FROM routes r LEFT JOIN tasks t ON t.task_id = r.task_id
+           LEFT JOIN route_grades g ON g.route_id = r.route_id
            ORDER BY r.ts DESC LIMIT ?""", (limit,)).fetchall()
     return [{**dict(r), "applied": bool(r["applied"]), "agent_id": r["agent_id"] or None} for r in rows]
+
+
+VERDICTS = ("right", "too_weak", "too_strong", "wrong_category")
+
+
+def grade_route(conn: sqlite3.Connection, route_id: int, verdict: str | None,
+                better: str | None = None, note: str | None = None) -> dict[str, Any]:
+    """Stores (or with verdict None clears) Leo's judgement of one routing decision."""
+    from .db import now_iso
+    with conn:
+        if verdict is None:
+            conn.execute("DELETE FROM route_grades WHERE route_id = ?", (route_id,))
+            return {"route_id": route_id, "verdict": None}
+        conn.execute(
+            """INSERT INTO route_grades(route_id, ts, verdict, better, note) VALUES (?,?,?,?,?)
+               ON CONFLICT(route_id) DO UPDATE SET ts=excluded.ts, verdict=excluded.verdict,
+                 better=excluded.better, note=excluded.note""",
+            (route_id, now_iso(), verdict, better, note))
+    return {"route_id": route_id, "verdict": verdict, "better": better, "note": note}
+
+
+def grade_summary(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Verdicts per category and chosen model, for the routing page and later the learner."""
+    rows = conn.execute(
+        """SELECT t.category, r.chosen_model, g.verdict, COUNT(*) n
+           FROM route_grades g JOIN routes r ON r.route_id = g.route_id LEFT JOIN tasks t ON t.task_id = r.task_id
+           GROUP BY t.category, r.chosen_model, g.verdict ORDER BY t.category, r.chosen_model""").fetchall()
+    return [dict(r) for r in rows]
 
 
 def categories(conn: sqlite3.Connection, days: int | None = 30) -> list[dict[str, Any]]:

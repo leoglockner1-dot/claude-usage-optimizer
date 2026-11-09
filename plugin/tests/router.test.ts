@@ -6,6 +6,7 @@ import { POLICY } from './fixture-policy'
 const CFG: any = {
   mode: 'auto', auto_models: ['haiku', 'sonnet', 'opus'], ceiling: 'fable', manual_model: 'sonnet', manual_effort: 'medium',
   haiku_main_max_context: 80000, min_switch_saving: 0.15, quota_guard: { five_hour: 80, seven_day: 90 },
+  floors: { visual_design: 'opus:medium' },
 }
 const base = (over: any = {}) => ({
   cls: classify('rename the variable foo to bar in utils.ts', '/tmp', false), policy: POLICY, cfg: CFG,
@@ -28,6 +29,27 @@ test('classifies a Luau datastore bug as debugging', () => {
 test('classifies German UI request as Roblox UI', () => {
   const c = classify('Baue ein Shop-Menü mit ScreenGui, UIListLayout und TweenService Animationen', '/x', false)
   expect(c.category).toBe('roblox_ui')
+})
+
+test('design work and redesigns are visual_design, system design stays arch', () => {
+  for (const p of ['Redesign the dashboard, it looks too generic', 'design a shop UI with a cleaner layout',
+    'Mach das Menü schöner, neue Optik', 'make it look better', 'build a mockup for the landing page'])
+    expect(classify(p, '/x', false).category).toBe('visual_design')
+  expect(classify('system design for the save architecture, trade-offs?', '/x', false).category).toBe('arch')
+  expect(classify('balance the game design economy and drop rates', '/x', false).category).toBe('game_design')
+})
+
+test('visual_design is floored at opus·medium, even in cost mode and under the quota guard', () => {
+  const cls = classify('redesign the settings page, cleaner layout', '/x', false)
+  const policy = { ...POLICY, table: { ...POLICY.table, visual_design: { low: { model: 'sonnet', effort: 'low' }, mid: { model: 'sonnet', effort: 'low' }, high: { model: 'sonnet', effort: 'low' } } } }
+  for (const mode of ['auto', 'cost']) {
+    const d = decide(base({ cls, policy, cfg: { ...CFG, mode }, currentModel: 'sonnet', quota: { fiveHour: 95 } }))
+    expect([d.model, d.effort]).toEqual(['opus', 'medium'])
+  }
+  const d = decide(base({ cls, cfg: { ...CFG, auto_models: ['haiku', 'sonnet'] }, currentModel: 'sonnet' }))
+  expect(d.model).toBe('opus')
+  const o = decide(base({ cls, currentModel: 'opus', override: { model: 'sonnet' } }))
+  expect(o.model).toBe('sonnet')
 })
 
 test('architecture prompts are at least complexity 3', () => {

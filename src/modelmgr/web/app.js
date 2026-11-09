@@ -109,10 +109,10 @@ const LOADERS = {
       .then(([timeline, sessions]) => ({ id: state.session, timeline, info: sessions.find((s) => s.session_id === state.session) }))
     : Promise.reject(new Error("no session selected"))),
   // routes and escalations are limit-based on the server; the period is applied here
-  routing: (q) => Promise.all([api("routes?limit=5000"), api(`categories?${q}`), api("escalations?limit=1000")])
-    .then(([routes, cats, esc]) => {
+  routing: (q) => Promise.all([api("routes?limit=5000"), api(`categories?${q}`), api("escalations?limit=1000"), api("grades")])
+    .then(([routes, cats, esc, grades]) => {
       const since = sinceIso();
-      return { routes: routes.filter((r) => r.ts >= since), cats, esc: esc.filter((r) => (r.ts || "") >= since) };
+      return { grades, routes: routes.filter((r) => r.ts >= since), cats, esc: esc.filter((r) => (r.ts || "") >= since) };
     }),
   quota: (q) => api(`quota?${q}`).then((rows) => ({ rows })),
   models: () => api("models").then((models) => ({ models })),
@@ -347,7 +347,54 @@ function renderSession({ id, timeline: tl, info }) {
   ], tl.slice().reverse());
 }
 
-function renderRouting({ routes, cats, esc }) {
+// ---------- judging routing decisions ----------
+
+const VERDICTS = [["", "—"], ["right", "right"], ["too_weak", "too weak"], ["too_strong", "too strong"], ["wrong_category", "wrong category"]];
+const VERDICT_LABEL = Object.fromEntries(VERDICTS);
+const BETTER = ["", "haiku:low", "haiku:medium", "sonnet:low", "sonnet:medium", "sonnet:high",
+  "opus:medium", "opus:high", "opus:xhigh", "fable:high"];
+
+async function saveGrade(r, patch, status) {
+  const next = { verdict: r.verdict || null, better: r.better || null, note: r.grade_note || null, ...patch };
+  status.textContent = "saving…";
+  try {
+    await post("grade", { route_id: r.route_id, ...next });
+    Object.assign(r, { verdict: next.verdict, better: next.better, grade_note: next.note });
+    status.textContent = next.verdict ? "saved" : "cleared";
+  } catch (e) {
+    status.textContent = e.message;
+  }
+}
+
+function judgeCell(r) {
+  const box = html("div", "judge");
+  if (r.route_id == null) { box.textContent = "—"; return box; }
+  const sel = html("select", null, box);
+  for (const [v, l] of VERDICTS) { const o = html("option", null, sel, l); o.value = v; }
+  sel.value = r.verdict || "";
+  sel.title = "Was this model the right choice?";
+  const better = html("select", null, box);
+  for (const v of BETTER) { const o = html("option", null, better, v || "better: —"); o.value = v; }
+  better.value = r.better || "";
+  better.title = "Which model and effort would have been right";
+  const note = html("input", null, box);
+  note.placeholder = "note";
+  note.maxLength = 500;
+  note.value = r.grade_note || "";
+  const status = html("span", "muted judge-status", box);
+  const toggle = () => { better.hidden = !(sel.value === "too_weak" || sel.value === "too_strong"); };
+  toggle();
+  sel.addEventListener("change", () => {
+    toggle();
+    if (!better.hidden && !better.value) better.value = "";
+    saveGrade(r, { verdict: sel.value || null, better: better.hidden ? null : better.value || null }, status);
+  });
+  better.addEventListener("change", () => saveGrade(r, { better: better.value || null }, status));
+  note.addEventListener("change", () => saveGrade(r, { note: note.value.trim() || null }, status));
+  return box;
+}
+
+function renderRouting({ routes, cats, esc, grades }) {
   const applied = routes.filter((r) => r.applied).length;
   const tasks = cats.reduce((s, c) => s + c.tasks, 0);
   const modes = [...new Set(routes.map((r) => r.mode).filter(Boolean))];
@@ -356,7 +403,20 @@ function renderRouting({ routes, cats, esc }) {
     { label: "Applied", value: int(applied), sub: routes.length ? `${pct(applied / routes.length)} of decisions` : "—" },
     { label: "Tasks classified", value: int(tasks) },
     { label: "Escalations", value: int(esc.length), sub: esc.length ? "model raised mid-task" : "none yet" },
+    (() => {
+      const judged = routes.filter((r) => r.verdict);
+      const right = judged.filter((r) => r.verdict === "right").length;
+      return { label: "Judged by you", value: int(judged.length),
+        sub: judged.length ? `${pct(right / judged.length)} right` : "pick a verdict in the log" };
+    })(),
   ]);
+
+  Charts.table(document.getElementById("rt-grades"), [
+    { label: "Category", value: (g) => g.category || "unknown" },
+    { label: "Chosen", value: (g) => modelInfo(g.chosen_model).name, key: (g) => modelInfo(g.chosen_model).cls },
+    { label: "Verdict", value: (g) => VERDICT_LABEL[g.verdict] || g.verdict },
+    { label: "Count", num: true, value: (g) => int(g.n) },
+  ], grades || [], "No verdicts yet. Judge decisions in the routing log below.");
 
   Charts.hbars(document.getElementById("rt-cats"), {
     fmt: int, unit: "tasks", empty: "No tasks in this period.",
@@ -392,6 +452,7 @@ function renderRouting({ routes, cats, esc }) {
     { label: "Applied", value: (r) => yesNo(r.applied) },
     { label: "Override", value: (r) => r.user_override || "—" },
     { label: "Reason", wide: true, value: (r) => r.reason || "—" },
+    { label: "Your verdict", value: judgeCell },
   ], routes, "No routing decisions in this period.");
 
   Charts.table(document.getElementById("rt-esc"), [
@@ -769,4 +830,5 @@ readHash();
 writeHash();
 render();
 load();
-setInterval(() => { if (!document.hidden) load(); }, REFRESH_MS);
+// skip a refresh while a verdict control has focus: re-rendering the log would drop the edit
+setInterval(() => { if (!document.hidden && !document.activeElement?.closest?.(".judge")) load(); }, REFRESH_MS);

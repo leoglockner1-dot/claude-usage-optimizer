@@ -57,6 +57,12 @@ def cmd_init(a) -> int:
     if policy.active() is None:
         f = policy.activate(policy.prior_policy(), conn)
         print(f"policy   {f} (v0, prior heuristics)")
+    else:
+        pol = policy.active()
+        added = policy.add_missing_categories(pol)
+        if added:
+            f = policy.activate(pol, conn)
+            print(f"policy   {f} (v{pol['version']}: added {', '.join(added)})")
     print(f"database {paths.db_path()}")
     print(f"spool    {paths.spool_dir()}")
     return 0

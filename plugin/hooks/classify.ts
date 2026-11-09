@@ -4,6 +4,7 @@
 export type Category =
   | 'edit' | 'docs' | 'luau' | 'roblox_ui' | 'code' | 'debug' | 'arch'
   | 'research' | 'game_design' | 'blender' | 'refactor' | 'test' | 'chat'
+  | 'visual_design'
 
 export type Classification = {
   category: Category
@@ -31,6 +32,8 @@ const RULES: Rule[] = [
   ['game_design', /\b(game design|spieldesign|economy|ökonomie|balanc\w*|progression|odds|rarity|drop rate|mechanic\w*|gameplay loop|monetiz\w*|gamepass)\b/i, 2.5],
   ['blender', /\b(blender|bpy|fbx|mesh|uv ?map|rig\w*|3d model|3d-modell|render\w*|sculpt)\b/i, 3],
   ['refactor', /\b(refactor\w*|clean ?up|aufräum\w*|extract|restructure|umstrukturier\w*|deduplicate|simplify|vereinfach\w*)\b/i, 2.5],
+  // visual / UI design and redesigns. Routed to Opus: Sonnet's designs come out too generic.
+  ['visual_design', /\b(re-?design\w*|neu gestalt\w*|(?<!(system|schema|game|database|api|datenbank) )design\w*|ui\/ux|ux|look and feel|look & feel|styling|restyle|mock-?ups?|wireframe\w*|figma|landing page|colou?r (palette|scheme)|farbschema|typograph\w*|aesthetic\w*|optik|make it (look|prettier|nicer|better|cleaner)|schöner|looks? (generic|boring|bland|ugly)|sieht .{0,20}(langweilig|generisch|hässlich) aus)/i, 4],
   ['test', /\b(tests?|testing|unit test|pytest|jest|vitest|testez|coverage|spec|teste\w*)\b/i, 2],
 ]
 
@@ -38,6 +41,7 @@ const FOLLOW_UP = /^(ok(ay)?|yes|yep|ja|jo|go( ahead)?|mach( weiter| das)?|weite
 const CORRECTION = /\b(still (not|broken|fails|failing|errors?|crash\w*|doesn'?t)|doesn'?t work|not working|wrong|falsch|nope|that broke|immer noch|geht (immer noch )?nicht|funktioniert (immer noch )?nicht|same error|gleicher fehler|selber fehler|didn'?t fix|nicht behoben|hat nicht geklappt|revert)\b/i
 const POSITIVE = /\b(works( now)?|it worked|fixed|funktioniert( jetzt)?|klappt|passt|perfect|perfekt|great|super|thanks|danke|looks good|sieht gut aus)\b/i
 const HARD = /\b(architecture|architektur|from scratch|von grund auf|entire|whole (system|project|codebase)|gesamte[nr]?|komplett\w*|redesign|rewrite|migrat\w*|multi-?file|across (all|the) files|complex|komplex\w*|difficult|schwierig|tricky|concurren\w*|race condition|performance|optimi[sz]\w*|security|sicherheit)\b/i
+const ARCH_STRONG = /\b(architect\w*|architektur|system design|schema design|data flow|trade-?offs?)\b/i
 const EASY = /\b(simple|einfach\w*|quick(ly)?|schnell|just|nur|small|klein\w*|minor|trivial|kurz)\b/i
 const RISK_HIGH = /\b(security|sicherheit|auth\w*|password|passwort|token|secret|credential|payment|zahlung|robux|production|prod\b|live server|migration|drop table|delete all|rm -rf|datastore (wipe|reset)|purchase|monetiz\w*)\b/i
 const RISK_MED = /\b(refactor\w*|database|datenbank|datastore|schema|deploy\w*|publish\w*|veröffentlich\w*)\b/i
@@ -69,6 +73,8 @@ export function classify(text: string, cwd: string, hasTask: boolean): Classific
   }
   if ((score.roblox_ui ?? 0) > 0 && (score.luau ?? 0) > 0) score.roblox_ui = (score.roblox_ui ?? 0) + 1
   if ((score.debug ?? 0) > 0 && (score.luau ?? 0) > 0) score.debug = (score.debug ?? 0) + 0.5
+  // "design a shop UI" also hits the arch rule's "design a"; only real architecture words keep arch
+  if (score.visual_design !== undefined && !ARCH_STRONG.test(t)) delete score.arch
 
   let category: Category = 'chat'
   let best = 0
@@ -100,6 +106,7 @@ export function classify(text: string, cwd: string, hasTask: boolean): Classific
   if (score.research) flags.push('research')
   if (asks >= 3 || /multi-?file|several files|mehrere dateien|across/i.test(t)) flags.push('multi_file')
   if (score.roblox_ui) flags.push('ui')
+  if (score.visual_design) flags.push('design')
 
   return { category, complexity, risk, flags, confidence: Math.round(confidence * 100) / 100, followUp, correction, positive }
 }

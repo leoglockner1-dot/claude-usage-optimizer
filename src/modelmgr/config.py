@@ -30,6 +30,8 @@ DEFAULTS: dict[str, Any] = {
     "quota_guard": {"five_hour": 80, "seven_day": 90},
     "learning": "auto",  # auto | suggest-only | off
     "store_prompts": "excerpt",  # excerpt | hash
+    # category -> lowest "model:effort" the router may pick (only an explicit [model] override goes below)
+    "floors": {"visual_design": "opus:medium"},
     "test_patterns": [
         r"\bpytest\b", r"\bnpm (run )?test\b", r"\bpnpm test\b", r"\byarn test\b", r"\bcargo test\b",
         r"\bgo test\b", r"\bjest\b", r"\bvitest\b", r"\bunittest\b", r"\bclaude plugin test\b",
@@ -131,6 +133,13 @@ def validate(cfg: dict[str, Any]) -> None:
             if bad:
                 auto = ", ".join(a for a, m in aliases.items() if m.auto)
                 raise ValueError(f"{key}: {', '.join(map(str, bad))} cannot be routed automatically (allowed: {auto})")
+    floors = cfg.get("floors", {})
+    if not isinstance(floors, dict):
+        raise ValueError("floors must map a category to \"model:effort\"")
+    for cat, cell in floors.items():
+        m, _, e = str(cell).partition(":")
+        if m not in aliases or (e and e not in registry.EFFORTS):
+            raise ValueError(f"floors.{cat} must be \"model:effort\", got {cell!r}")
     ceiling = aliases[cfg["ceiling"]].tier
     for m in cfg["auto_models"]:
         if aliases[m].tier > ceiling:
