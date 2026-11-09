@@ -3,7 +3,7 @@
 Binds to 127.0.0.1 only. A random token is created per start; the URL printed by the CLI carries
 it once, the server swaps it for a SameSite=Strict cookie, and every API call needs that cookie or
 the X-MM-Token header. The Host header must name this server (blocks DNS rebinding). Writes are
-POST /api/config, /api/killswitch and /api/grade only: JSON bodies, same Origin, validated like the CLI.
+POST /api/config, /api/killswitch, /api/grade and /api/rollback only: JSON bodies, same Origin, validated like the CLI.
 """
 
 from __future__ import annotations
@@ -158,8 +158,31 @@ def post_grade(body: Any, conn: sqlite3.Connection) -> dict[str, Any]:
     return queries.grade_route(conn, rid, verdict, better, note)
 
 
+def post_rollback(body: Any, conn: sqlite3.Connection) -> dict[str, Any]:
+    """{"version": 3}: make an earlier (or later) stored policy version the active one."""
+    if not isinstance(body, dict):
+        raise BadRequest("send a JSON object")
+    v = body.get("version")
+    if not isinstance(v, int) or isinstance(v, bool) or not 0 <= v <= 9999:
+        raise BadRequest("version must be a whole number from 0 to 9999")
+    if v not in {h["version"] for h in policy.history()}:
+        raise BadRequest(f"no stored policy v{v}")
+    pol = policy.rollback(v, conn)
+    return {"active": pol["version"], "source": pol.get("source")}
+
+
+def api_policy(conn, qs, parts, state) -> dict[str, Any]:
+    from . import learn  # computed live, writes nothing
+    out = learn.to_json(learn.compute(conn))
+    act = (policy.active() or {}).get("version")
+    out["versions"] = [{**h, "active": h["version"] == act} for h in policy.history()]
+    out["floors"] = config.load().get("floors", {})
+    out["active_changes"] = (policy.active() or {}).get("changes", [])
+    return out
+
+
 # handlers that take a DB connection as second argument
-POSTS_DB: dict[str, Callable[[Any, sqlite3.Connection], Any]] = {"grade": post_grade}
+POSTS_DB: dict[str, Callable[[Any, sqlite3.Connection], Any]] = {"grade": post_grade, "rollback": post_rollback}
 POSTS: dict[str, Callable[[Any], Any]] = {"config": post_config, "killswitch": post_killswitch}
 
 
@@ -186,6 +209,7 @@ ROUTES: dict[str, Callable[..., Any]] = {
     "quota": lambda c, q, p, s: queries.quota(c, _days(q, 7)),
     "models": api_models,
     "config": api_config,
+    "policy": api_policy,
 }
 
 

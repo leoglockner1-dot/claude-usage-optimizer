@@ -190,13 +190,7 @@ def cmd_last(a) -> int:
 def cmd_insights(a) -> int:
     conn = db.open_db()
     _refresh(conn)
-    try:
-        from . import learn
-    except ImportError:
-        learn = None
-    if learn is None:
-        print("Learning engine not installed yet.")
-        return 0
+    from . import learn
     return learn.print_insights(conn)
 
 
@@ -204,7 +198,7 @@ def cmd_learn(a) -> int:
     from . import learn
     conn = db.open_db()
     _refresh(conn)
-    return learn.run(conn, dry_run=a.dry_run)
+    return learn.run(conn, dry_run=a.dry_run, suggest_only=a.suggest_only)
 
 
 def cmd_config(a) -> int:
@@ -331,7 +325,8 @@ def main(argv: list[str] | None = None) -> int:
     s.set_defaults(f=cmd_last)
     sub.add_parser("insights", help="what the system has learned").set_defaults(f=cmd_insights)
     s = sub.add_parser("learn", help="recompute statistics and compile a new policy")
-    s.add_argument("--dry-run", action="store_true")
+    s.add_argument("--dry-run", action="store_true", help="compute and print, write nothing")
+    s.add_argument("--suggest-only", action="store_true", help="never activate, whatever config.learning says")
     s.set_defaults(f=cmd_learn)
     s = sub.add_parser("config", help="show or set config (dotted keys, JSON values)")
     s.add_argument("key", nargs="?")

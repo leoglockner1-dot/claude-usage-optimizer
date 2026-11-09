@@ -2,8 +2,8 @@
 
 const { html } = Charts;
 const REFRESH_MS = 60_000; // the server ingests every 30 s
-const PAGES = ["overview", "context", "projects", "session", "routing", "quota", "models", "settings"];
-const NO_PERIOD = new Set(["session", "models", "settings"]); // pages that ignore the period filter
+const PAGES = ["overview", "context", "projects", "session", "routing", "policy", "quota", "models", "settings"];
+const NO_PERIOD = new Set(["session", "policy", "models", "settings"]); // pages that ignore the period filter
 const TAB_OF = { session: "projects" };
 
 // colour follows the model family, never its rank in the current period
@@ -114,6 +114,7 @@ const LOADERS = {
       const since = sinceIso();
       return { grades, routes: routes.filter((r) => r.ts >= since), cats, esc: esc.filter((r) => (r.ts || "") >= since) };
     }),
+  policy: () => api("policy").then((pol) => ({ pol })),
   quota: (q) => api(`quota?${q}`).then((rows) => ({ rows })),
   models: () => api("models").then((models) => ({ models })),
   settings: () => Promise.all([api("config"), api("status"), api("models")])
@@ -505,6 +506,119 @@ function renderQuota({ rows }) {
   ], rows.slice().reverse());
 }
 
+// ---------- policy: what the learning engine sees, what is routed, versions ----------
+
+const BANDS = ["low", "mid", "high"];
+const BAND_LABEL = { low: "low (1–2)", mid: "mid (3)", high: "high (4–5)" };
+const STATUS_LABEL = { keep: "kept", change: "changes", suggestion: "suggestion" };
+const cellName = (k) => { const [m, e] = (k || "").split(":"); return `${modelInfo(m).name}${e ? ` · ${e}` : ""}`; };
+
+function renderPolicy({ pol }) {
+  const t = pol.thresholds;
+  const decs = pol.decisions;
+  const thin = decs.filter((d) => d.status === "keep" && d.reasons.some((r) => r.includes("not enough evidence"))).length;
+  const sugg = decs.filter((d) => d.status !== "keep");
+  const active = pol.versions.find((v) => v.active);
+  tiles(document.getElementById("pl-tiles"), [
+    { label: "Active policy", value: `v${pol.policy_version ?? "?"}`, hero: true, sub: active ? `${active.source} · ${when(active.created_at)}` : "" },
+    { label: "Learning", value: pol.learning, sub: pol.learning === "auto" ? "activates changes that pass" : pol.learning === "off" ? "nothing is learned" : "suggests only" },
+    { label: "Evidence", value: int(pol.closed_tasks), sub: `closed tasks · ${count(pol.verdicts, "verdict")}` },
+    { label: "Not enough evidence", value: `${thin} of ${decs.length}`, sub: "category bands" },
+    { label: "Suggestions", value: int(sugg.length), sub: sugg.length ? "see below" : "none yet" },
+  ]);
+  document.getElementById("pl-rule").textContent = `A change needs n ≥ ${t.min_n}, a lower bound (${Math.round(t.credible * 100)} % interval) ≥ ${pct(t.target_lb)}, ` +
+    `≥ ${pct(t.min_gain)} lower expected cost, and the old choice not better on verified data. Cells with n < ${t.pool_below_n} borrow from the same model's pooled rate.`;
+
+  // heatmap: category × model, success estimate and count, colour by p (only where measured)
+  const box = document.getElementById("pl-heat");
+  box.replaceChildren();
+  const cats = Object.keys(pol.table).sort();
+  const tb = html("table", "data heat", box);
+  const head = html("tr", null, html("thead", null, tb));
+  html("th", null, head, "Category");
+  for (const m of pol.models) html("th", "num", head, modelInfo(m).name);
+  const body = html("tbody", null, tb);
+  for (const c of cats) {
+    const tr = html("tr", null, body);
+    html("td", null, tr, c);
+    for (const m of pol.models) {
+      const h = pol.heatmap[c]?.[m];
+      const td = html("td", "num heat-cell", tr);
+      if (!h) { td.append("—"); td.classList.add("empty"); continue; }
+      html("strong", null, td, pct(h.p));
+      html("span", "heat-n", td, ` n ${h.n}`);
+      td.title = `${c} on ${modelInfo(m).name}: p ${h.p.toFixed(2)}, lower bound ${h.lb.toFixed(2)}, ${h.n} observations` +
+        (h.verdicts ? `, ${h.verdicts} verdicts` : "") + (h.n < t.min_n ? " – not enough evidence" : "");
+      td.style.setProperty("--heat", `${Math.round(Math.max(0, (h.p - 0.5) / 0.5) * 60)}%`);
+      if (h.n < t.min_n) td.classList.add("thin");
+    }
+  }
+
+  // routed choice per category band with the engine's decision
+  const byKey = Object.fromEntries(decs.map((d) => [`${d.category}/${d.band}`, d]));
+  Charts.table(document.getElementById("pl-table"), [
+    { label: "Category", value: (c) => c },
+    ...BANDS.map((b) => ({ label: BAND_LABEL[b], value: (c) => {
+      const x = pol.table[c][b];
+      if (!x) return "—";
+      const d = byKey[`${c}/${b}`];
+      return `${cellName(`${x.model}:${x.effort}`)}${x.n ? ` (p ${x.p.toFixed(2)}, n ${x.n})` : ""}${d && d.status !== "keep" ? " ●" : ""}`;
+    } })),
+    { label: "Floor", value: (c) => (pol.floors[c] ? cellName(pol.floors[c]) : "—") },
+  ], cats);
+
+  Charts.table(document.getElementById("pl-sugg"), [
+    { label: "Category", value: (d) => `${d.category} · ${d.band}` },
+    { label: "Now", value: (d) => cellName(d.current) },
+    { label: "Engine's pick", value: (d) => cellName(d.best) },
+    { label: "Status", value: (d) => STATUS_LABEL[d.status] },
+    { label: "p", num: true, value: (d) => (d.evidence.best ? d.evidence.best.p.toFixed(2) : "—") },
+    { label: "Lower bound", num: true, value: (d) => (d.evidence.best ? d.evidence.best.lb.toFixed(2) : "—") },
+    { label: "n", num: true, value: (d) => (d.evidence.best ? int(d.evidence.best.n) : "—") },
+    { label: "Cost gain", num: true, value: (d) => pct(d.evidence.cost_gain) },
+    { label: "Why", wide: true, value: (d) => d.reasons.join("; ") },
+  ], sugg, "No suggestions. Most cells have not enough evidence yet; verdicts on the Routing page count double.");
+
+  Charts.table(document.getElementById("pl-cells"), [
+    { label: "Category", value: (c) => `${c.category} · ${c.band}` },
+    { label: "Model", value: (c) => cellName(`${c.model}:${c.effort}`), key: (c) => modelInfo(c.model).cls },
+    { label: "n", num: true, value: (c) => int(c.n) },
+    { label: "Verified", num: true, value: (c) => int(c.verified_n) },
+    { label: "p", num: true, value: (c) => c.p.toFixed(2) },
+    { label: "Lower bound", num: true, value: (c) => c.lb.toFixed(2) },
+    { label: "Median cost", num: true, value: (c) => usd(c.cost) },
+    { label: "Pooled from", value: (c) => c.pooled || "—" },
+  ], pol.cells, "No closed tasks with a known outcome yet.");
+
+  const vbox = document.getElementById("pl-versions");
+  Charts.table(vbox, [
+    { label: "Version", value: (v) => `v${v.version}${v.active ? " (active)" : ""}` },
+    { label: "Created", value: (v) => when(v.created_at) },
+    { label: "Source", value: (v) => v.source || "—" },
+    { label: "Changes", num: true, value: (v) => int(v.changes) },
+    { label: "", value: (v) => {
+      if (v.active) return "";
+      const b = html("button", "rollback");
+      b.type = "button";
+      b.textContent = `Activate v${v.version}`;
+      b.addEventListener("click", async () => {
+        if (!confirm(`Make policy v${v.version} the active policy? The mod uses it from the next prompt.`)) return;
+        b.disabled = true;
+        const msg = document.getElementById("pl-msg");
+        try { await post("rollback", { version: v.version }); msg.textContent = `Policy v${v.version} is active.`; msg.classList.remove("error"); await load(); }
+        catch (e) { msg.textContent = `Not changed: ${e.message}`; msg.classList.add("error"); b.disabled = false; }
+      });
+      return b;
+    } },
+  ], pol.versions.slice().reverse(), "No stored versions.");
+  Charts.table(document.getElementById("pl-changes"), [
+    { label: "Category", value: (c) => `${c.category} · ${c.band}` },
+    { label: "From", value: (c) => cellName(c.from) },
+    { label: "To", value: (c) => cellName(c.to) },
+    { label: "Why", wide: true, value: (c) => c.why || "—" },
+  ], pol.active_changes, "The active version changed nothing against its parent.");
+}
+
 function renderModels({ models }) {
   const name = { label: "Model", value: (m) => modelInfo(m.model_id).name, key: (m) => modelInfo(m.model_id).cls };
   Charts.table(document.getElementById("md-models"), [
@@ -765,7 +879,7 @@ window.addEventListener("beforeunload", (e) => { if (st.draft && changedKeys().l
 
 const RENDER = {
   overview: renderOverview, context: renderContext, projects: renderProjects, session: renderSession,
-  routing: renderRouting, quota: renderQuota, models: renderModels, settings: renderSettings,
+  routing: renderRouting, policy: renderPolicy, quota: renderQuota, models: renderModels, settings: renderSettings,
 };
 
 function render() {

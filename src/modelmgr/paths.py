@@ -43,6 +43,11 @@ def policies_dir() -> Path:
     return home() / "policies"
 
 
+def learn_state_path() -> Path:
+    """Last learning run: time and closed-task count, for the auto-learn trigger in ingest."""
+    return home() / "learn.json"
+
+
 def backups_dir() -> Path:
     return home() / "backups"
 

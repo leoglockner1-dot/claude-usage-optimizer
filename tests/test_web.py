@@ -172,6 +172,26 @@ class WebTest(unittest.TestCase):
             self.assertEqual(self.post("grade", bad)[0], 400, bad)
         self.assertEqual(self.post("grade", {"route_id": 7, "verdict": "right"}, {"Origin": None})[0], 403)
 
+    def test_policy_page_and_rollback(self):
+        from modelmgr import policy
+        status, pol = self.api("policy")
+        self.assertEqual(status, 200)
+        self.assertEqual(pol["policy_version"], 0)
+        self.assertEqual([v["version"] for v in pol["versions"]], [0])
+        self.assertTrue(pol["versions"][0]["active"])
+        self.assertIn("visual_design", pol["floors"])
+        self.assertEqual(pol["thresholds"]["min_n"], 8)
+        self.assertTrue(all(d["status"] == "keep" for d in pol["decisions"]))
+        v1 = dict(policy.active(), version=1, source="learned", changes=[])
+        policy.activate(v1)
+        for bad in ({"version": "0"}, {"version": True}, {"version": 5}, {"version": -1}, {}, {"version": 0.5}):
+            self.assertEqual(self.post("rollback", bad)[0], 400, bad)
+        self.assertEqual(policy.active()["version"], 1)
+        status, out = self.post("rollback", {"version": 0})
+        self.assertEqual(status, 200, out)
+        self.assertEqual(policy.active()["version"], 0)
+        self.assertEqual(self.post("rollback", {"version": 0}, {"Origin": None})[0], 403)
+
     def test_kill_switch(self):
         from modelmgr import paths
         self.assertEqual(self.post("killswitch", {"disabled": True}), (200, {"disabled": True}))

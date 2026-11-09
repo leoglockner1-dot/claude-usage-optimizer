@@ -15,6 +15,7 @@
       <a href="#context" data-page="context">Context</a>
       <a href="#projects" data-page="projects">Projects</a>
       <a href="#routing" data-page="routing">Routing</a>
+      <a href="#policy" data-page="policy">Policy</a>
       <a href="#quota" data-page="quota">Quota</a>
       <a href="#models" data-page="models">Models</a>
       <a href="#settings" data-page="settings">Settings</a>
@@ -143,6 +144,36 @@
     <div class="card">
       <h2>Escalations</h2>
       <div id="rt-esc"></div>
+    </div>
+  </section>
+
+  <section id="page-policy" hidden>
+    <div class="tiles" id="pl-tiles"></div>
+    <div class="card">
+      <h2>Success by category and model</h2>
+      <p class="sub">Estimated success rate p and observations n, all bands and efforts pooled. Pale cells: fewer than 8 observations. Hover for the lower bound.</p>
+      <div id="pl-heat"></div>
+    </div>
+    <div class="card">
+      <h2>Suggestions</h2>
+      <p class="sub" id="pl-rule"></p>
+      <div id="pl-sugg"></div>
+    </div>
+    <div class="card">
+      <h2>Routed choice</h2>
+      <p class="sub">What the active policy routes per complexity band. ● marks a band with a suggestion.</p>
+      <div id="pl-table"></div>
+    </div>
+    <div class="card">
+      <h2>Versions</h2>
+      <p class="sub">Every compiled policy is kept. Activating an older one is a rollback. <span id="pl-msg" role="status" aria-live="polite"></span></p>
+      <div id="pl-versions"></div>
+      <details><summary>Changes in the active version</summary><div id="pl-changes"></div></details>
+    </div>
+    <div class="card">
+      <h2>All cells with data</h2>
+      <p class="sub">Per category band, model and effort. Outcomes count for the model that answered; verdicts for the router's pick.</p>
+      <div id="pl-cells"></div>
     </div>
   </section>
 
