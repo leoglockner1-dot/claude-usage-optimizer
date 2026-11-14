@@ -250,6 +250,13 @@ class DashboardServer(ThreadingHTTPServer):
         # bring the schema up to date once (additive tables such as findings), also with --no-ingest
         db.open_db(db_path).close()
 
+    def server_bind(self) -> None:
+        # HTTPServer.server_bind() looks up the host's FQDN, a reverse DNS call that can hang for
+        # many seconds on macOS. The name is unused on 127.0.0.1, so bind without it.
+        import socketserver
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = "127.0.0.1", self.server_address[1]
+
     @property
     def port(self) -> int:
         return self.server_address[1]
