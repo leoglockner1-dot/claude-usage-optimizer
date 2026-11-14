@@ -34,9 +34,9 @@ const Optimizer = (() => {
     findings: () => api("findings?all=1").then((findings) => ({ findings })),
     tool: () => {
       const tool = state.tool;
-      return Promise.all([api("tools"), api("findings")]).then(([t, f]) => {
+      return Promise.all([api("tools"), api("findings"), tool === "context" ? api("context?days=30") : null]).then(([t, f, hist]) => {
         tools = t;
-        return { tool, info: t.find((x) => x.tool === tool), findings: f.filter((x) => x.tool === tool) };
+        return { tool, info: t.find((x) => x.tool === tool), findings: f.filter((x) => x.tool === tool), hist };
       });
     },
   };
@@ -238,7 +238,22 @@ const Optimizer = (() => {
     for (const f of shown) findingCard(list, f, load);
   }
 
-  function renderTool({ tool, info, findings }) {
+  function renderCostBySize(hist) {
+    const box = document.getElementById("tl-extra");
+    const measured = (hist || []).filter((b) => b.lo != null);
+    box.hidden = !measured.some((b) => b.requests);
+    if (box.hidden) return;
+    Charts.columns(document.getElementById("tl-hist"), {
+      labels: measured.map((b) => b.label), series: [{ key: "c", name: "cost", cls: "s1" }],
+      rows: measured.map((b) => ({ c: b.est_cost_usd })), fmt: usd, tickFmt: usdTick, height: 220,
+      aria: "Cost by context size", capLabel: (i) => pct(measured[i].cost_share),
+      title: (i) => `${measured[i].label} tokens`,
+      extra: (i) => [{ value: int(measured[i].requests), label: "requests" },
+                     { value: pct(measured[i].cost_share), label: "of cost" }],
+    });
+  }
+
+  function renderTool({ tool, info, findings, hist }) {
     const hero = document.getElementById("tl-hero");
     hero.className = `card glass tool-hero t-${tool}`;
     hero.replaceChildren();
@@ -248,6 +263,7 @@ const Optimizer = (() => {
     h("p", null, hero, info?.about || "");
     const list = document.getElementById("tl-list");
     list.replaceChildren();
+    renderCostBySize(hist);
     if (!info?.built) {
       empty(list, `Analyzer comes in phase ${PHASE[tool]}`,
         tool === "context" ? "Until then, the Model Manager Context page shows the raw context data."

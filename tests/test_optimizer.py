@@ -118,7 +118,8 @@ class OptimizerTest(unittest.TestCase):
         self.assertIsNone(home["health"]["score"])
         self.assertEqual(home["top"], [])
         self.assertEqual({t["tool"] for t in home["tools"]}, {"context", "output", "waste"})
-        self.assertTrue(all(t["built"] is False for t in home["tools"]))
+        self.assertEqual({t["tool"]: t["built"] for t in home["tools"]},
+                         {"context": True, "output": False, "waste": False})
 
     def test_summary_carries_top_finding(self):
         from modelmgr import optimizers, queries
