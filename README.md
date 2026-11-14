@@ -1,12 +1,15 @@
-# AI Model Manager
+# Usage Optimizer
 
-Model routing and usage tracking for Claude Code. A Claude Code mod picks the
-model and effort for every turn, and moves a task up one step when it keeps
-failing. It records what each request cost. A Python core stores that in
-SQLite and shows it in a local dashboard and a CLI. Nothing leaves the machine.
+See where your Claude Code usage goes and how to cut it. Usage Optimizer reads your local Claude Code
+data and advises: long contexts, wasted tool output, reply length, and more. It never edits your settings.
+Model Manager is one of its tools: a Claude Code mod that picks the model and effort for every turn and
+records what each request cost. Everything runs on your machine and nothing leaves it.
 
-It starts in **observe** mode: it records and shows what it would pick, but
+Model Manager starts in **observe** mode: it records and shows what it would pick, but
 never changes the model until you switch the mode.
+
+Requirements: Python 3.11 or later, [uv](https://docs.astral.sh/uv/), and Claude Code 2.1.287 or later for the mod.
+The dashboard and the optimizer also work without the mod, on your existing Claude Code transcripts.
 
 ## Parts
 
@@ -19,22 +22,38 @@ never changes the model until you switch the mode.
 ## Install
 
 ```bash
-uv tool install --editable .
+git clone https://github.com/<owner>/ai-model-manager
+cd ai-model-manager
+uv tool install .
 model-manager init
-claude plugin marketplace add "$PWD"
+```
+
+Replace `<owner>` with the GitHub account that hosts the repository. To update later, `git pull` and run
+`uv tool install . --force`.
+
+Open the dashboard (keep the terminal open; Ctrl+C stops it):
+
+```bash
+usage-optimizer --open
+```
+
+Optional, the Claude Code mod (model routing, `/mm`, stats pane, status line):
+
+```bash
+claude plugin marketplace add <owner>/ai-model-manager
 claude plugin install model-manager@ai-model-manager
 ```
 
-Mods need Claude Code 2.1.287 or later. Restart Claude Code after installing or updating the mod. Check the setup with
-`model-manager doctor`.
+Restart Claude Code after installing or updating the mod. Check the setup with `model-manager doctor`.
+For development, use `uv tool install --editable .` from the clone and `claude plugin marketplace add "$PWD"`.
 
 ## Dashboard
 
 ```bash
-model-manager dashboard --open
+usage-optimizer --open
 ```
 
-Run it in a terminal window and keep it open; Ctrl+C stops it. It serves
+It serves
 `http://127.0.0.1:8765` and ingests new events every 30 seconds.
 
 - **Overview, Context, Projects, Routing, Quota, Models**: cost, requests,
