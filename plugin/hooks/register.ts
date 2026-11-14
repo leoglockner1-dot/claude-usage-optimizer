@@ -219,9 +219,24 @@ function pin(model: string, effort?: string): string {
   return `Current task pinned to ${model}${effort ? '·' + effort : ''}.`
 }
 
+// starts `model-manager dashboard --open` in its own session (perl setsid), so the end of this
+// shell or a closed tab sends it no SIGHUP; the server opens the browser and writes dashboard.json
+async function startDashboard($: any) {
+  const bin = `${home}/.local/bin/model-manager`
+  const log = `${home}/.model-manager/dashboard.log`
+  const cmd = `perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' '${bin}' dashboard --open </dev/null >>'${log}' 2>&1 &`
+  try {
+    const r: any = await $.process.run(['sh', '-c', cmd])
+    if (r?.exitCode && r.exitCode !== 0) throw new Error(String(r.exitCode))
+    $.ui.toast('Starting dashboard… it opens in your browser; the pane picks it up within 30 s')
+  } catch {
+    $.ui.toast('Could not start the dashboard. Run: model-manager dashboard --open')
+  }
+}
+
 async function openDashboard($: any) {
   await readSummary($)
-  if (!dashboardUrl) { $.ui.toast('Dashboard not running. Start it with: model-manager dashboard --open'); return }
+  if (!dashboardUrl) { await startDashboard($); return }
   try { await $.process.run(['open', dashboardUrl]) } catch { $.ui.toast(`Open ${dashboardUrl}`) }
 }
 
@@ -271,6 +286,8 @@ export function register(on: any) {
     await readSummary($)
     try { const u = await $.session.usage(); quotaFrom(u); sessionFrom(u) } catch {}
     await publish($)
+    // open the pane automatically; a surface without panes just skips it
+    try { await $.ui.open({ id: PANE_ID, title: 'Model Manager' }) } catch {}
     $.clock.every(30_000, async () => { await flush($); await readSummary($); await publish($) })
     try {
       await $.command.register({ name: 'mm', description: 'AI Model Manager: pane, status, mode, good/bad, use <model>, why, off/on', argumentHint: '[pane|status|mode <m>|good|bad|use <model[:effort]>|why|off|on]', immediate: true })
