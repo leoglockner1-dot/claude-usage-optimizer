@@ -3,6 +3,7 @@ import json
 import os
 import tempfile
 import threading
+import sys
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
@@ -257,6 +258,7 @@ class WebTest(unittest.TestCase):
         web.remove_handle()
         self.assertFalse(path.exists())
 
+    @unittest.skipIf(sys.platform == "win32", "Windows has no SIGHUP")
     def test_hangup_removes_the_handle(self):
         # a closed terminal sends SIGHUP: the server must still clean up dashboard.json
         import signal
