@@ -5,6 +5,19 @@ data and advises: long contexts, wasted tool output, reply length, and more. It 
 Model Manager is one of its tools: a Claude Code mod that picks the model and effort for every turn and
 records what each request cost. Everything runs on your machine and nothing leaves it.
 
+![Home: usage health score, estimated savings and top findings](docs/img/home.png)
+
+<table><tr>
+<td><img src="docs/img/findings.png" alt="Findings: each with evidence, a fix to copy and an estimated saving"></td>
+<td><img src="docs/img/context.png" alt="Context: cost by context size and context size per day"></td>
+</tr></table>
+
+The mod's status line in Claude Code tells you when to compact or start a new session:
+
+![Status line with the hint "task done · new session is cheap"](docs/img/statusline.png)
+
+Screenshots use made-up data from `scripts/demo_data.py`.
+
 Model Manager starts in **observe** mode: it records and shows what it would pick, but
 never changes the model until you switch the mode.
 
