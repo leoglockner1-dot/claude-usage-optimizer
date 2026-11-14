@@ -5,6 +5,8 @@ then explain the tool to the user. Ask before running anything outside this list
 
 ## 1. Check requirements
 
+- macOS or Linux. Windows is untested; tell the user so before going on.
+- `git --version` must work.
 - `python3 --version` must be 3.11 or later.
 - `uv --version` must work. If not, tell the user to install uv (https://docs.astral.sh/uv/) and stop.
 
@@ -21,6 +23,9 @@ model-manager doctor
 `doctor` should show only ticks. If a line fails, read its hint, fix it, and run `doctor` again.
 
 ## 3. Optional: the Claude Code mod
+
+Run `claude --version` first. If it is older than 2.1.287, skip this step and tell the user the mod needs
+2.1.287 or later.
 
 Ask the user first: "Do you also want the Model Manager mod? It picks the model and effort per turn. It starts
 in observe mode and changes nothing until you switch the mode." If yes:
@@ -48,6 +53,7 @@ Explain in plain words, short:
 
 - **Usage Optimizer** reads local Claude Code data and advises how to cut usage. It never edits settings or files.
   Nothing leaves the machine.
+- **Feedback:** the *Send feedback* button in the dashboard sidebar opens a GitHub issue.
 - **Dashboard:** run `usage-optimizer --open` in a terminal and keep it open (Ctrl+C stops it). Home shows a
   Usage Health score from 0 to 100, a 30-day history, and the estimated monthly saving.
 - **Three tools:** Context & Cache (long contexts, low cache reuse, rewrites after pauses), Output Lab (long or

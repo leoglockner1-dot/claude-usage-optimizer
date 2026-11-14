@@ -122,6 +122,13 @@ const LOADERS = {
     .then(([cfg, status, models]) => ({ cfg, status, models })),
 };
 
+// Feedback goes through a GitHub issue the user reviews and submits; only version and OS are filled in, no usage data.
+function feedbackLink(status) {
+  const body = `**What happened or what would help?**\n\n\n---\nversion ${status.version} · mode ${status.mode} · ${navigator.platform}`;
+  const q = new URLSearchParams({ title: "Feedback: ", body });
+  document.getElementById("feedback").href = `https://github.com/leoglockner1-dot/claude-usage-optimizer/issues/new?${q}`;
+}
+
 async function load() {
   const err = document.getElementById("error");
   const page = state.page;
@@ -131,6 +138,7 @@ async function load() {
     state.data[page] = data;
     err.hidden = true;
     renderStatus(status);
+    feedbackLink(status);
     Optimizer.renderNav(status);
     render();
   } catch (e) {
