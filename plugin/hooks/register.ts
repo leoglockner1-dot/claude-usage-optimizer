@@ -1,4 +1,4 @@
-// AI Model Manager – Claude Code mod.
+// Model Manager – Claude Code mod, part of Claude Usage Optimizer.
 // Classifies each prompt locally, chooses model + effort per turn (turn.step), routes subagents
 // (agent.spawn), watches tests/builds for escalation, and spools measurements for the Python core.
 // Fails open: any hook error is skipped by Claude Code and the session keeps its own model.
@@ -292,7 +292,7 @@ export function register(on: any) {
     try { await $.ui.open({ id: PANE_ID, title: 'Model Manager' }) } catch {}
     $.clock.every(30_000, async () => { await flush($); await readSummary($); await publish($) })
     try {
-      await $.command.register({ name: 'mm', description: 'AI Model Manager: pane, status, mode, good/bad, use <model>, why, off/on', argumentHint: '[pane|status|mode <m>|good|bad|use <model[:effort]>|why|off|on]', immediate: true })
+      await $.command.register({ name: 'mm', description: 'Model Manager: pane, status, mode, good/bad, use <model>, why, off/on', argumentHint: '[pane|status|mode <m>|good|bad|use <model[:effort]>|why|off|on]', immediate: true })
     } catch {}
     return next(e)
   })

@@ -27,7 +27,7 @@ in observe mode and changes nothing until you switch the mode." If yes:
 
 ```bash
 claude plugin marketplace add leoglockner1-dot/claude-usage-optimizer
-claude plugin install model-manager@ai-model-manager
+claude plugin install model-manager@claude-usage-optimizer
 ```
 
 Needs Claude Code 2.1.287 or later. Tell the user to restart Claude Code afterwards.
@@ -59,6 +59,6 @@ Explain in plain words, short:
 - **Model Manager** (if the mod is installed): `/mm` shows state, `/mm pane` opens a stats pane,
   `/mm mode auto` turns routing on, `/mm off` is the kill switch. Observe mode is the default.
 - **Update later:** `git pull` in the clone, then `uv tool install . --force`.
-- **Uninstall:** `uv tool uninstall ai-model-manager`. Data stays in `~/.model-manager/`.
+- **Uninstall:** `uv tool uninstall claude-usage-optimizer`. Data stays in `~/.model-manager/`.
 
 Then offer to run `usage-optimizer --open` for them and read out their top findings.

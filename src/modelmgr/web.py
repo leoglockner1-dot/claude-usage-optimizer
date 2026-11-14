@@ -476,7 +476,7 @@ def serve(port: int = DEFAULT_PORT, open_browser: bool = False, auto_ingest: boo
     write_handle(srv)
     if auto_ingest:
         srv.start_ingest_loop()
-    print(f"AI Model Manager dashboard: {srv.url()}", flush=True)
+    print(f"Claude Usage Optimizer dashboard: {srv.url()}", flush=True)
     print("Local only (127.0.0.1). Ctrl+C stops it.", flush=True)
     if open_browser:
         import webbrowser

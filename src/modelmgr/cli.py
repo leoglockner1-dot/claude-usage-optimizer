@@ -82,7 +82,7 @@ def cmd_status(a) -> int:
     last = conn.execute("SELECT MAX(ts) FROM requests WHERE source='mod'").fetchone()[0]
     tasks = conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
     spool = len(list(paths.spool_dir().glob("*.json"))) if paths.spool_dir().exists() else 0
-    print(f"AI Model Manager {__version__}")
+    print(f"Claude Usage Optimizer {__version__}")
     print(f"  mode            {mode}")
     print(f"  policy          v{pol.get('version', '?')} ({pol.get('source', 'missing')})")
     print(f"  auto models     {', '.join(cfg['auto_models'])}  · ceiling {cfg['ceiling']}")
@@ -320,7 +320,7 @@ def cmd_doctor(a) -> int:
     try:
         s = json.loads(settings.read_text())
         enabled = any(k.startswith("model-manager@") and v for k, v in (s.get("enabledPlugins") or {}).items())
-        check("plugin enabled in ~/.claude/settings.json", enabled, "claude plugin install model-manager@ai-model-manager")
+        check("plugin enabled in ~/.claude/settings.json", enabled, "claude plugin install model-manager@claude-usage-optimizer")
         check("disableAllHooks not set", not s.get("disableAllHooks"), "remove disableAllHooks")
     except (OSError, json.JSONDecodeError):
         check("~/.claude/settings.json readable", False)
@@ -336,7 +336,7 @@ def cmd_doctor(a) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(prog="model-manager", description="AI Model Manager for Claude Code")
+    p = argparse.ArgumentParser(prog="model-manager", description="Claude Usage Optimizer for Claude Code")
     p.add_argument("--version", action="version", version=__version__)
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("init", help="create data dir, config, database, initial policy").set_defaults(f=cmd_init)

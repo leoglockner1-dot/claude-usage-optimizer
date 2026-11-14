@@ -44,7 +44,7 @@ Optional, the Claude Code mod (model routing, `/mm`, stats pane, status line):
 
 ```bash
 claude plugin marketplace add leoglockner1-dot/claude-usage-optimizer
-claude plugin install model-manager@ai-model-manager
+claude plugin install model-manager@claude-usage-optimizer
 ```
 
 Restart Claude Code after installing or updating the mod. Check the setup with `model-manager doctor`.
@@ -121,9 +121,9 @@ One task on a fixed model: start the prompt with `[haiku]`, `[sonnet:high]` or
 ## Stop it
 
 - Kill switch: dashboard Settings, `/mm off` or `model-manager off`. Undo with `model-manager on`.
-- Uninstall: `claude plugin uninstall model-manager@ai-model-manager`,
-  `claude plugin marketplace remove ai-model-manager`,
-  `uv tool uninstall ai-model-manager`. Data stays in `~/.model-manager/`.
+- Uninstall: `claude plugin uninstall model-manager@claude-usage-optimizer`,
+  `claude plugin marketplace remove claude-usage-optimizer`,
+  `uv tool uninstall claude-usage-optimizer`. Data stays in `~/.model-manager/`.
 
 ## Develop
 
@@ -133,8 +133,8 @@ cd plugin && claude plugin validate . && claude plugin test .
 ```
 
 After changing mod code, bump `plugin/.claude-plugin/plugin.json` and run
-`claude plugin marketplace update ai-model-manager` and
-`claude plugin update model-manager@ai-model-manager`.
+`claude plugin marketplace update claude-usage-optimizer` and
+`claude plugin update model-manager@claude-usage-optimizer`.
 
 ## License
 

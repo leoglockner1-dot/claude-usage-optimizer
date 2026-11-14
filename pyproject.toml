@@ -1,7 +1,7 @@
 [project]
-name = "ai-model-manager"
+name = "claude-usage-optimizer"
 version = "0.1.0"
-description = "Self-improving model routing, tracking and learning for Claude Code"
+description = "Usage Optimizer for Claude Code: find where usage goes and how to cut it. Includes Model Manager."
 requires-python = ">=3.11"
 license = "MIT"
 dependencies = []

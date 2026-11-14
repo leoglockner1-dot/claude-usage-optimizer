@@ -1,6 +1,6 @@
 # model-manager (Claude Code mod)
 
-Part of the AI Model Manager. On every prompt it classifies the task locally (no model call), chooses a
+Part of Claude Usage Optimizer. On every prompt it classifies the task locally (no model call), chooses a
 model and effort for the turn from `~/.model-manager/policy.json`, and applies it through the `turn.step`
 event. It routes read-only `Explore` subagents to Haiku, watches test and build commands to escalate when a
 task struggles, and writes measurements to `~/.model-manager/spool/` for the Python core.
