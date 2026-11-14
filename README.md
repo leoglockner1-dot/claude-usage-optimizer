@@ -1,4 +1,4 @@
-# Usage Optimizer
+# Claude Usage Optimizer
 
 See where your Claude Code usage goes and how to cut it. Usage Optimizer reads your local Claude Code
 data and advises: long contexts, wasted tool output, reply length, and more. It never edits your settings.
@@ -21,12 +21,12 @@ The dashboard and the optimizer also work without the mod, on your existing Clau
 
 ## Install
 
-With Claude Code, say: *Install https://github.com/leoglockner1-dot/ai-model-manager and show me how to use it.*
+With Claude Code, say: *Install https://github.com/leoglockner1-dot/claude-usage-optimizer and show me how to use it.*
 Claude follows [INSTALL.md](INSTALL.md), then explains the features. Or do it by hand:
 
 ```bash
-git clone https://github.com/leoglockner1-dot/ai-model-manager
-cd ai-model-manager
+git clone https://github.com/leoglockner1-dot/claude-usage-optimizer
+cd claude-usage-optimizer
 uv tool install .
 model-manager init
 ```
@@ -43,7 +43,7 @@ usage-optimizer --open
 Optional, the Claude Code mod (model routing, `/mm`, stats pane, status line):
 
 ```bash
-claude plugin marketplace add leoglockner1-dot/ai-model-manager
+claude plugin marketplace add leoglockner1-dot/claude-usage-optimizer
 claude plugin install model-manager@ai-model-manager
 ```
 

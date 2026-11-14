@@ -11,8 +11,8 @@ then explain the tool to the user. Ask before running anything outside this list
 ## 2. Install
 
 ```bash
-git clone https://github.com/leoglockner1-dot/ai-model-manager
-cd ai-model-manager
+git clone https://github.com/leoglockner1-dot/claude-usage-optimizer
+cd claude-usage-optimizer
 uv tool install .
 model-manager init
 model-manager doctor
@@ -26,7 +26,7 @@ Ask the user first: "Do you also want the Model Manager mod? It picks the model 
 in observe mode and changes nothing until you switch the mode." If yes:
 
 ```bash
-claude plugin marketplace add leoglockner1-dot/ai-model-manager
+claude plugin marketplace add leoglockner1-dot/claude-usage-optimizer
 claude plugin install model-manager@ai-model-manager
 ```
 
