@@ -83,9 +83,14 @@
   <section id="page-tool" hidden>
     <div class="card glass tool-hero" id="tl-hero"></div>
     <div class="card" id="tl-extra" hidden>
-      <h2>Cost by context size</h2>
-      <p class="sub">API-equivalent estimate, last 30 days. Every token above the limit is read again on each following request.</p>
+      <h2 id="tl-extra-title">Cost by context size</h2>
+      <p class="sub" id="tl-extra-sub">API-equivalent estimate, last 30 days. Every token above the limit is read again on each following request.</p>
       <div class="plot" id="tl-hist"></div>
+    </div>
+    <div class="card" id="tl-tools" hidden>
+      <h2>Tools that shorten answers</h2>
+      <p class="sub">Read from your Claude Code settings. Nothing here changes a setting.</p>
+      <div id="tl-tools-list"></div>
     </div>
     <div id="tl-list" class="finding-list"></div>
   </section>

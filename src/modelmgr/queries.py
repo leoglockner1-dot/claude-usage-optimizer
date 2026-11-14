@@ -189,6 +189,36 @@ def model_mix(conn: sqlite3.Connection, days: int | None = 30) -> list[dict[str,
     } for r in rows]
 
 
+def output_breakdown(conn: sqlite3.Connection, days: int | None = 30) -> dict[str, Any]:
+    """Output cost per model and effort, plus which output-shortening tools are active."""
+    from .optimizers import output as out_mod
+    groups: dict[tuple[str, str], dict[str, Any]] = {}
+    q = "SELECT model, effort, output_tokens, thinking_tokens, input_tokens, cache_write_5m, cache_write_1h, cache_read, est_cost_usd FROM requests"
+    args: list[Any] = []
+    if days:
+        q += " WHERE ts >= ?"
+        args.append(since(days))
+    for r in conn.execute(q, args):
+        split = cost_by_kind(r)
+        if split is None or r["output_tokens"] is None:
+            continue
+        key = (registry.normalize_model(r["model"]) or "unknown", r["effort"] or "not set")
+        g = groups.setdefault(key, {"model": key[0], "effort": key[1], "requests": 0, "output_tokens": 0,
+                                    "thinking_tokens": 0, "output_cost_usd": 0.0})
+        g["requests"] += 1
+        g["output_tokens"] += r["output_tokens"]
+        g["thinking_tokens"] += r["thinking_tokens"] or 0
+        g["output_cost_usd"] += split["output"]
+    rows = sorted(groups.values(), key=lambda g: -g["output_cost_usd"])
+    for g in rows:
+        g["output_cost_usd"] = _r(g["output_cost_usd"])
+        g["avg_output"] = round(g["output_tokens"] / g["requests"])
+    st = out_mod._settings()
+    tools = [{"id": e["id"], "name": e["name"], "reduces": e["reduces"], "state": out_mod.detect(e, st)}
+             for e in out_mod.catalog()]
+    return {"by_model": rows, "tools": tools}
+
+
 def context_histogram(conn: sqlite3.Connection, days: int | None = 30) -> list[dict[str, Any]]:
     buckets = [{"label": lab, "lo": lo, "hi": hi, "requests": 0, "est_cost_usd": 0.0} for lab, lo, hi in CONTEXT_BUCKETS]
     not_measured = 0

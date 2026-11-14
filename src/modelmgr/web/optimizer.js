@@ -34,7 +34,7 @@ const Optimizer = (() => {
     findings: () => api("findings?all=1").then((findings) => ({ findings })),
     tool: () => {
       const tool = state.tool;
-      return Promise.all([api("tools"), api("findings"), tool === "context" ? api("context?days=30") : null]).then(([t, f, hist]) => {
+      return Promise.all([api("tools"), api("findings"), tool === "context" || tool === "output" ? api(tool + "?days=30") : null]).then(([t, f, hist]) => {
         tools = t;
         return { tool, info: t.find((x) => x.tool === tool), findings: f.filter((x) => x.tool === tool), hist };
       });
@@ -253,6 +253,33 @@ const Optimizer = (() => {
     });
   }
 
+  function renderOutputExtras(data) {
+    const box = document.getElementById("tl-extra");
+    const rows = (data?.by_model || []).filter((g) => g.output_cost_usd);
+    box.hidden = !rows.length;
+    if (rows.length) {
+      document.getElementById("tl-extra-title").textContent = "Output cost by model and effort";
+      document.getElementById("tl-extra-sub").textContent =
+        "API-equivalent estimate, last 30 days. Thinking tokens count as output.";
+      Charts.hbars(document.getElementById("tl-hist"), {
+        rows: rows.slice(0, 8).map((g) => ({
+          label: `${g.model} · ${g.effort}`, value: g.output_cost_usd,
+          note: `${int(g.avg_output)} output tokens per request, ${int(g.requests)} requests`,
+        })), fmt: usd, unit: "output cost",
+      });
+    }
+    const tools = document.getElementById("tl-tools");
+    tools.hidden = !(data?.tools || []).length;
+    const list = document.getElementById("tl-tools-list");
+    list.replaceChildren();
+    for (const t of data?.tools || []) {
+      const row = h("div", "tool-row", list);
+      h("span", `chip st-${t.state}`, row, t.state === "active" ? "active" : t.state === "installed" ? "installed, off" : "not set up");
+      h("strong", null, row, " " + t.name);
+      h("span", "muted", row, ` · reduces ${t.reduces}`);
+    }
+  }
+
   function renderTool({ tool, info, findings, hist }) {
     const hero = document.getElementById("tl-hero");
     hero.className = `card glass tool-hero t-${tool}`;
@@ -263,7 +290,14 @@ const Optimizer = (() => {
     h("p", null, hero, info?.about || "");
     const list = document.getElementById("tl-list");
     list.replaceChildren();
-    renderCostBySize(hist);
+    document.getElementById("tl-tools").hidden = true;
+    if (tool === "output") renderOutputExtras(hist);
+    else {
+      document.getElementById("tl-extra-title").textContent = "Cost by context size";
+      document.getElementById("tl-extra-sub").textContent =
+        "API-equivalent estimate, last 30 days. Every token above the limit is read again on each following request.";
+      renderCostBySize(hist);
+    }
     if (!info?.built) {
       empty(list, `Analyzer comes in phase ${PHASE[tool]}`,
         tool === "context" ? "Until then, the Model Manager Context page shows the raw context data."

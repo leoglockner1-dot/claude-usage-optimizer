@@ -215,6 +215,7 @@ ROUTES: dict[str, Callable[..., Any]] = {
     "daily": lambda c, q, p, s: queries.daily(c, _days(q, 30)),
     "model-mix": lambda c, q, p, s: queries.model_mix(c, _days(q, 30)),
     "context": lambda c, q, p, s: queries.context_histogram(c, _days(q, 30)),
+    "output": lambda c, q, p, s: queries.output_breakdown(c, _days(q, 30)),
     "context-daily": lambda c, q, p, s: queries.context_daily(c, _days(q, 30)),
     "projects": lambda c, q, p, s: queries.projects(c, _days(q, 30)),
     "sessions": lambda c, q, p, s: (api_session(c, q, p, s) if p

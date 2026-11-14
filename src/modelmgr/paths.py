@@ -60,6 +60,11 @@ def claude_projects_dir() -> Path:
     return Path(os.environ.get("MM_CLAUDE_PROJECTS", Path.home() / ".claude" / "projects"))
 
 
+def claude_home() -> Path:
+    """Claude Code's own config folder (settings.json, CLAUDE.md, plugin cache)."""
+    return Path(os.environ.get("MM_CLAUDE_HOME", Path.home() / ".claude"))
+
+
 def ensure() -> None:
     for d in (home(), spool_dir(), spool_done_dir(), policies_dir(), backups_dir()):
         d.mkdir(parents=True, exist_ok=True)

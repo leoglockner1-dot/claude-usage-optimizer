@@ -1,0 +1,62 @@
+[
+  {
+    "id": "caveman",
+    "name": "caveman plugin",
+    "reduces": "reply length",
+    "effect": "terse replies; typically cuts reply tokens by a large share",
+    "detect": {"plugin": "caveman"},
+    "install": "Install the caveman plugin, then run /caveman. /ultracave is terser.",
+    "tradeoff": "Terse replies can drop explanation you wanted. Switch it off with \"normal mode\" when you need detail.",
+    "covers": []
+  },
+  {
+    "id": "caveman-compress",
+    "name": "caveman-compress",
+    "reduces": "input tokens from CLAUDE.md and memory files",
+    "effect": "shrinks the files that are read at the start of every session",
+    "detect": {"file_exists": ["CLAUDE.original.md"]},
+    "install": "Run /caveman-compress on CLAUDE.md. It keeps a readable backup next to the file.",
+    "tradeoff": "Compressed text is harder to read and edit by hand.",
+    "covers": []
+  },
+  {
+    "id": "rtk",
+    "name": "RTK (Rust Token Killer)",
+    "reduces": "Bash tool output",
+    "effect": "filters long command output before Claude reads it",
+    "detect": {"which": "rtk", "hook_mentions": "rtk"},
+    "install": "Install rtk and add its PreToolUse hook for Bash in settings.json.",
+    "tradeoff": "Filtered output can hide a line you needed; `rtk proxy <cmd>` shows the raw output.",
+    "covers": []
+  },
+  {
+    "id": "output-style",
+    "name": "Concise output style",
+    "reduces": "reply length",
+    "effect": "a standing style instruction for every reply",
+    "detect": {"setting_set": "outputStyle"},
+    "install": "Set an output style in Claude Code settings (outputStyle) that asks for short answers.",
+    "tradeoff": "A style applies to all work, including tasks where long answers are right.",
+    "covers": []
+  },
+  {
+    "id": "low-effort",
+    "name": "Lower default effort",
+    "reduces": "thinking tokens",
+    "effect": "less thinking on routine turns",
+    "detect": {"setting_in": {"effortLevel": ["low", "medium"]}, "mm_mode": "auto"},
+    "install": "Set a lower effort level in settings, or turn Model Manager mode to auto so it picks effort per task.",
+    "tradeoff": "Hard tasks can need more thinking; use the effort override for those.",
+    "covers": []
+  },
+  {
+    "id": "reply-rule",
+    "name": "CLAUDE.md reply rule",
+    "reduces": "reply length",
+    "effect": "one rule: answer first, no recap, no closing offer",
+    "detect": {"claude_md_matches": "answer first|no recap|be terse|terse|concise replies|short answers"},
+    "install": "Add to CLAUDE.md: \"Answer first. No recap, no closing offer. Keep code and numbers exact.\"",
+    "tradeoff": "A rule is followed less strictly than a plugin that enforces a mode.",
+    "covers": ["caveman", "output-style"]
+  }
+]
