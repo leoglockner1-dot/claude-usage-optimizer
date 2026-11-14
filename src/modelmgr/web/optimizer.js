@@ -144,6 +144,27 @@ const Optimizer = (() => {
 
   // ---------- pages ----------
 
+  function renderSaved(s) {
+    const box = document.getElementById("hm-saved");
+    box.replaceChildren();
+    const tile = (label, value, sub) => {
+      const d = h("div", "tile glass", box);
+      h("div", "tile-label", d, label);
+      h("div", "tile-value", d, value);
+      h("div", "tile-sub", d, sub);
+    };
+    const q = s.mm_week_quota_points;
+    tile("Model Manager · this week", usd(s.mm_week_usd),
+      s.mm_week_routed ? `${pct(s.mm_week_share)} of the week's usage${q != null ? ` · about ${+q.toFixed(1)} quota points` : ""}`
+                       : "no routed requests this week");
+    tile("Model Manager · all time", usd(s.mm_total_usd), `${int(s.mm_total_routed)} routed requests`);
+    tile("Optimizer · applied", usd(s.uo_applied_usd_30d), `${int(s.uo_applied_count)} findings, per 30 days`);
+    tile("Optimizer · still open", usd(s.uo_open_usd_30d), "potential per 30 days");
+    tile("Overall estimate", usd(s.overall_usd), "MM all time + applied findings");
+    document.getElementById("hm-saved-note").textContent =
+      "All figures are estimates in API-equivalent dollars. MM compares routed requests with the baseline model; quota points are rough.";
+  }
+
   function renderHome({ home }) {
     const hl = home.health;
     ring(document.getElementById("hm-ring"), hl.score);
@@ -163,6 +184,8 @@ const Optimizer = (() => {
     spark(document.getElementById("hm-spark"), home.daily);
     document.getElementById("hm-spend-sub").textContent =
       `${int(sp.requests)} requests · ${int(sp.sessions)} sessions · ${tok(sp.tokens?.output)} output tokens · cache read ${pct(sp.cache_read_share)} of cost`;
+
+    renderSaved(home.savings);
 
     const top = document.getElementById("hm-top");
     top.replaceChildren();

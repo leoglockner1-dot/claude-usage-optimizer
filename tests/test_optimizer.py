@@ -23,6 +23,20 @@ class OptimizerTest(unittest.TestCase):
                        evidence={"summary": "3 sessions", "examples": ["s1"]}, fix="compact earlier",
                        est_saving_usd=saving)
 
+    def test_savings_block(self):
+        from modelmgr import queries
+        from modelmgr.optimizers import run_all, set_status
+        empty = queries.savings(self.conn)
+        self.assertIsNone(empty["mm_week_usd"])
+        self.assertIsNone(empty["overall_usd"])
+        f = self.finding(saving=7.0)
+        run_all(self.conn, {"context": [lambda c: [f]]})
+        self.assertEqual(queries.savings(self.conn)["uo_open_usd_30d"], 7.0)
+        set_status(self.conn, f.id, "applied")
+        s = queries.savings(self.conn)
+        self.assertEqual((s["uo_applied_usd_30d"], s["uo_applied_count"], s["uo_open_usd_30d"]), (7.0, 1, 0.0))
+        self.assertEqual(s["overall_usd"], 7.0)
+
     def test_schema_v2_has_findings(self):
         from modelmgr import db
         self.assertEqual(self.conn.execute("SELECT version FROM schema_version").fetchone()[0], db.SCHEMA_VERSION)

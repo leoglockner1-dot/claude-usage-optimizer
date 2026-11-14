@@ -491,6 +491,40 @@ def health(conn: sqlite3.Connection, spend_30d: float | None) -> dict[str, Any]:
             "spend_usd": spend_30d, "rule": "100 × (1 − avoidable ÷ spend), avoidable capped at 60% of spend"}
 
 
+def savings(conn: sqlite3.Connection) -> dict[str, Any]:
+    """Estimated savings, always labelled as estimates.
+
+    mm_*: routed requests priced against the baseline model (see overview). Share of week =
+    saved / (spent + saved). Quota points = saved dollars x (latest 7d quota % / this week's spend),
+    which is rough: the quota also depends on how the provider counts usage.
+    uo_*: sum of est_saving_usd (per 30 days) of findings Leo marked applied, plus still-open ones.
+    """
+    wk, al = overview(conn, 7), overview(conn, None)
+    saved_w = wk["savings"]["est_savings_usd"]
+    spent_w = wk["est_cost_usd"]
+    share = None
+    if saved_w is not None and spent_w is not None and spent_w + saved_w > 0:
+        share = _r(saved_w / (spent_w + saved_w))
+    pts = None
+    q = [x["quota_7d"] for x in quota(conn, 7) if x["quota_7d"] is not None]
+    if saved_w is not None and spent_w and q:
+        pts = _r(saved_w * q[-1] / spent_w)
+    uo = {r[0]: (r[1] or 0.0, r[2]) for r in conn.execute(
+        """SELECT status, SUM(est_saving_usd), COUNT(*) FROM findings WHERE active = 1
+           AND status IN ('new','seen','applied') GROUP BY status""")}
+    applied = uo.get("applied", (0.0, 0))
+    open_usd = sum(uo.get(s, (0.0, 0))[0] for s in ("new", "seen"))
+    mm_total = al["savings"]["est_savings_usd"]
+    return {
+        "mm_week_usd": saved_w, "mm_week_share": share, "mm_week_quota_points": pts,
+        "mm_week_routed": wk["savings"]["routed_requests"],
+        "mm_total_usd": mm_total, "mm_total_routed": al["savings"]["routed_requests"],
+        "uo_applied_usd_30d": _r(applied[0]), "uo_applied_count": applied[1],
+        "uo_open_usd_30d": _r(open_usd),
+        "overall_usd": _r((mm_total or 0.0) + applied[0]) if (mm_total is not None or applied[1]) else None,
+    }
+
+
 def home(conn: sqlite3.Connection) -> dict[str, Any]:
     ov = overview(conn, 30)
     open_f = [f for f in findings(conn) if f["status"] in ("new", "seen")]
@@ -499,6 +533,7 @@ def home(conn: sqlite3.Connection) -> dict[str, Any]:
         "spend": {k: ov[k] for k in ("est_cost_usd", "requests", "sessions", "tokens", "cache_read_share",
                                      "median_context")},
         "daily": daily(conn, 30),
+        "savings": savings(conn),
         "top": open_f[:3],
         "open_findings": len(open_f),
         "tools": optimizer_tools(conn),
