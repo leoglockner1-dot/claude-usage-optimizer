@@ -267,6 +267,7 @@ class WebTest(unittest.TestCase):
         src = str(Path(__file__).resolve().parents[1] / "src")
         env = {**os.environ, "PYTHONPATH": src}
         proc = subprocess.Popen([sys.executable, "-c",
+                                 "import faulthandler; faulthandler.dump_traceback_later(20); "
                                  "from modelmgr import web; web.serve(port=0, auto_ingest=False)"],
                                 env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         try:
