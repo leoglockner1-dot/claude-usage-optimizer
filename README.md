@@ -21,14 +21,17 @@ The dashboard and the optimizer also work without the mod, on your existing Clau
 
 ## Install
 
+With Claude Code, say: *Install https://github.com/leoglockner1-dot/ai-model-manager and show me how to use it.*
+Claude follows [INSTALL.md](INSTALL.md), then explains the features. Or do it by hand:
+
 ```bash
-git clone https://github.com/<owner>/ai-model-manager
+git clone https://github.com/leoglockner1-dot/ai-model-manager
 cd ai-model-manager
 uv tool install .
 model-manager init
 ```
 
-Replace `<owner>` with the GitHub account that hosts the repository. To update later, `git pull` and run
+To update later, `git pull` and run
 `uv tool install . --force`.
 
 Open the dashboard (keep the terminal open; Ctrl+C stops it):
@@ -40,7 +43,7 @@ usage-optimizer --open
 Optional, the Claude Code mod (model routing, `/mm`, stats pane, status line):
 
 ```bash
-claude plugin marketplace add <owner>/ai-model-manager
+claude plugin marketplace add leoglockner1-dot/ai-model-manager
 claude plugin install model-manager@ai-model-manager
 ```
 
