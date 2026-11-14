@@ -268,12 +268,14 @@ class WebTest(unittest.TestCase):
         env = {**os.environ, "PYTHONPATH": src}
         proc = subprocess.Popen([sys.executable, "-c",
                                  "from modelmgr import web; web.serve(port=0, auto_ingest=False)"],
-                                env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         try:
             deadline = time.time() + 30  # CI runners can take many seconds to start Python
-            while time.time() < deadline and not paths.dashboard_path().exists():
+            while time.time() < deadline and proc.poll() is None and not paths.dashboard_path().exists():
                 time.sleep(0.05)
-            self.assertTrue(paths.dashboard_path().exists())
+            if not paths.dashboard_path().exists():
+                proc.kill()
+                self.fail("server did not start: " + proc.communicate()[1].decode(errors="replace")[-2000:])
             proc.send_signal(signal.SIGHUP)
             proc.wait(timeout=5)
             self.assertFalse(paths.dashboard_path().exists())
