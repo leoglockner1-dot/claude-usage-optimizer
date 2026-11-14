@@ -13,5 +13,11 @@ a prompt with `[haiku]`, `[sonnet:high]`, `[opus]`, or with `/mm use <model[:eff
 `/mm pane` opens a stats pane: this session's cost and context, 5-hour and 7-day plan usage, the last 7
 days from `~/.model-manager/summary.json` (written by `model-manager ingest`), and buttons for mode, grading
 and pinning. The status line shows `mm <model>·<effort> · ctx <tokens> · 5h <percent>`.
+When it is time to leave the session it adds a hint after `⚠`:
+
+- `start a new session`: context is at 250K or more.
+- `task done · new session is cheap`: the last task passed its tests (or you marked it good) and context is 60K or more.
+- `/compact soon`: context is at 150K or more.
+- `cache cold · /compact or new session`: more than 5 minutes since the last request and context is 100K or more, so the next request rewrites the whole context.
 
 If anything in the mod fails, Claude Code skips the hook and keeps its own model.

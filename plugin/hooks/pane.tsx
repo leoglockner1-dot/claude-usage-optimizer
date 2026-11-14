@@ -71,13 +71,30 @@ function clock(iso: string): string {
   return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
+// when to leave this session: every later request re-reads the whole context from cache, a cold cache
+// rewrites it, and a finished task has nothing left to carry over. Thresholds in tokens / ms.
+export const ADVICE = { newSession: 250_000, compact: 150_000, afterTask: 60_000, cold: 100_000, ttlMs: 5 * 60_000 }
+
+export function advice(v: View, now: number): string | null {
+  const ctx = v.session.contextTokens
+  if (ctx == null) return null
+  if (ctx >= ADVICE.newSession) return 'start a new session'
+  if (v.taskDone && ctx >= ADVICE.afterTask) return 'task done · new session is cheap'
+  if (ctx >= ADVICE.compact) return '/compact soon'
+  const at = v.session.lastRequestAt
+  if (at != null && ctx >= ADVICE.cold && now - at > ADVICE.ttlMs) return 'cache cold · /compact or new session'
+  return null
+}
+
 // one line for the status bar: `mm opus·med · ctx 84K · 5h 37%`
-export function statusLine(v: View): string | undefined {
+export function statusLine(v: View, now: number = Date.now()): string | undefined {
   if (v.disabled) return 'mm off'
   if (v.mode === 'off') return undefined
   const parts = [v.route ? `mm ${v.route.model}·${v.route.effort.slice(0, 3)}${v.route.applied ? '' : ' (obs)'}` : `mm ${v.mode}`]
   if (v.session.contextTokens != null) parts.push(`ctx ${tok(v.session.contextTokens)}`)
   if (v.quota.fiveHour != null) parts.push(`5h ${pct(v.quota.fiveHour)}`)
+  const hint = advice(v, now)
+  if (hint) parts.push(`⚠ ${hint}`)
   return parts.join(' · ')
 }
 

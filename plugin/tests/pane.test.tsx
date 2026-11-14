@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { meter, sparkText, statusLine, tok, usd } from '../hooks/pane'
+import { advice, meter, sparkText, statusLine, tok, usd } from '../hooks/pane'
 import { POLICY } from './fixture-policy'
 
 const PANE = {
@@ -130,4 +130,22 @@ test('formatters and the status line', () => {
   expect(statusLine(v)).toBe('mm sonnet·med · ctx 84K · 5h 37%')
   expect(statusLine({ ...v, disabled: true })).toBe('mm off')
   expect(statusLine({ ...v, mode: 'off' })).toBe(undefined)
+})
+
+test('new-session advice: size, finished task, cold cache', () => {
+  const now = 1_000_000_000
+  const v: any = {
+    mode: 'observe', disabled: false, task: null, summary: null, dashboardUrl: null, route: null,
+    session: { requests: 3, costUsd: 1, contextTokens: 40_000, contextWindow: 1e6, lastRequestAt: now - 1000 },
+    quota: { fiveHour: null, sevenDay: null, fiveHourResets: null },
+  }
+  const at = (ctx: number, extra: any = {}) => advice({ ...v, ...extra, session: { ...v.session, contextTokens: ctx, ...(extra.session ?? {}) } }, now)
+  expect(at(40_000)).toBe(null)
+  expect(at(160_000)).toBe('/compact soon')
+  expect(at(260_000)).toBe('start a new session')
+  expect(at(70_000, { taskDone: true })).toBe('task done · new session is cheap')
+  expect(at(40_000, { taskDone: true })).toBe(null)
+  expect(at(120_000, { session: { lastRequestAt: now - 6 * 60_000 } })).toBe('cache cold · /compact or new session')
+  expect(at(50_000, { session: { lastRequestAt: now - 6 * 60_000 } })).toBe(null)
+  expect(statusLine({ ...v, session: { ...v.session, contextTokens: 260_000 } }, now)).toBe('mm observe · ctx 260K · ⚠ start a new session')
 })

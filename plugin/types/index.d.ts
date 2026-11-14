@@ -27,7 +27,8 @@ export type View = {
   disabled: boolean
   route: Route | null
   task: { category: string; complexity: number; pinned: string | null } | null
-  session: { requests: number; costUsd: number | null; contextTokens: number | null; contextWindow: number | null }
+  session: { requests: number; costUsd: number | null; contextTokens: number | null; contextWindow: number | null; lastRequestAt?: number | null }
+  taskDone?: boolean
   quota: { fiveHour: number | null; sevenDay: number | null; fiveHourResets: string | null }
   summary: Summary | null
   dashboardUrl: string | null

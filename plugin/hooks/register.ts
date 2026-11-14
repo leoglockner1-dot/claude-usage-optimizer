@@ -81,6 +81,7 @@ let session: View['session'] = { requests: 0, costUsd: null, contextTokens: null
 let fiveHourResets: string | null = null
 let summary: Summary | null = null
 let dashboardUrl: string | null = null
+let lastRequestAt: number | null = null
 
 const EMPTY_VIEW: View = {
   mode: 'observe', disabled: false, route: null, task: null,
@@ -177,7 +178,8 @@ function snapshot(): View {
     route: d ? { model: d.model, effort: d.effort, reason: d.reason, applied: d.apply,
                  category: task?.cls.category ?? null, complexity: task?.cls.complexity ?? null } : null,
     task: task ? { category: task.cls.category, complexity: task.cls.complexity, pinned: task.override?.model ?? null } : null,
-    session: { ...session, requests: sessionRequests },
+    session: { ...session, requests: sessionRequests, lastRequestAt },
+    taskDone: !!task && (task.feedback === 'good' || (!!task.verified && !task.lastFailedTests)),
     quota: { fiveHour: quota.fiveHour ?? null, sevenDay: quota.sevenDay ?? null, fiveHourResets },
     summary, dashboardUrl,
   }
@@ -366,6 +368,7 @@ export function register(on: any) {
     }
     const r = yield* next(sent)
     sessionRequests++
+    lastRequestAt = Date.now()
     const answered = aliasOf(r?.usage?.model ?? sent.model, policy)
     marks[answered] = { at: Date.now(), messageCount: e.messageCount ?? 0 }
     emit({ type: 'request', request_key: `${e.turnId}:${e.agentId ?? 'main'}:${e.index}`, task_id: task?.id ?? null,
