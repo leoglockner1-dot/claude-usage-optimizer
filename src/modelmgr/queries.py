@@ -219,6 +219,21 @@ def output_breakdown(conn: sqlite3.Connection, days: int | None = 30) -> dict[st
     return {"by_model": rows, "tools": tools}
 
 
+def waste_breakdown(conn: sqlite3.Connection, days: int | None = 30) -> dict[str, Any]:
+    """Tokens in large tool results (8K characters and up) per tool, from the cached transcript scan."""
+    from .optimizers import waste as waste_mod
+    cutoff = since(days or 30)
+    per: dict[str, dict[str, Any]] = {}
+    for t in waste_mod.scan():
+        for ts, tool, chars, _ in t["big"]:
+            if not ts or ts[:19] < cutoff[:19]:
+                continue
+            g = per.setdefault(tool, {"tool": tool, "results": 0, "tokens": 0})
+            g["results"] += 1
+            g["tokens"] += chars // waste_mod.CHARS_PER_TOKEN
+    return {"by_tool": sorted(per.values(), key=lambda g: -g["tokens"])}
+
+
 def context_histogram(conn: sqlite3.Connection, days: int | None = 30) -> list[dict[str, Any]]:
     buckets = [{"label": lab, "lo": lo, "hi": hi, "requests": 0, "est_cost_usd": 0.0} for lab, lo, hi in CONTEXT_BUCKETS]
     not_measured = 0

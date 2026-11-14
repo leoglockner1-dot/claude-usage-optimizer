@@ -34,7 +34,7 @@ const Optimizer = (() => {
     findings: () => api("findings?all=1").then((findings) => ({ findings })),
     tool: () => {
       const tool = state.tool;
-      return Promise.all([api("tools"), api("findings"), tool === "context" || tool === "output" ? api(tool + "?days=30") : null]).then(([t, f, hist]) => {
+      return Promise.all([api("tools"), api("findings"), tool === "context" || tool === "output" || tool === "waste" ? api(tool + "?days=30") : null]).then(([t, f, hist]) => {
         tools = t;
         return { tool, info: t.find((x) => x.tool === tool), findings: f.filter((x) => x.tool === tool), hist };
       });
@@ -280,6 +280,20 @@ const Optimizer = (() => {
     }
   }
 
+  function renderWasteExtras(data) {
+    const box = document.getElementById("tl-extra");
+    const rows = (data?.by_tool || []).slice(0, 8);
+    box.hidden = !rows.length;
+    if (!rows.length) return;
+    document.getElementById("tl-extra-title").textContent = "Large tool results by tool";
+    document.getElementById("tl-extra-sub").textContent =
+      "Tokens in results of 8K characters and up, last 30 days. Each stays in context for every later request.";
+    Charts.hbars(document.getElementById("tl-hist"), {
+      rows: rows.map((g) => ({ label: g.tool, value: g.tokens, note: `${int(g.results)} results` })),
+      fmt: (v) => `${(v / 1e6).toFixed(2)}M`, unit: "tokens",
+    });
+  }
+
   function renderTool({ tool, info, findings, hist }) {
     const hero = document.getElementById("tl-hero");
     hero.className = `card glass tool-hero t-${tool}`;
@@ -292,6 +306,7 @@ const Optimizer = (() => {
     list.replaceChildren();
     document.getElementById("tl-tools").hidden = true;
     if (tool === "output") renderOutputExtras(hist);
+    else if (tool === "waste") renderWasteExtras(hist);
     else {
       document.getElementById("tl-extra-title").textContent = "Cost by context size";
       document.getElementById("tl-extra-sub").textContent =
