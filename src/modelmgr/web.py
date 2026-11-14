@@ -471,8 +471,9 @@ def serve(port: int = DEFAULT_PORT, open_browser: bool = False, auto_ingest: boo
     # a closed terminal (SIGHUP) or kill (SIGTERM) must still remove dashboard.json, else the pane links a dead URL
     def _stop(signum, frame):
         raise KeyboardInterrupt
-    for sig in (signal.SIGTERM, signal.SIGHUP):
-        signal.signal(sig, _stop)
+    for name in ("SIGTERM", "SIGHUP"):  # Windows has no SIGHUP
+        if hasattr(signal, name):
+            signal.signal(getattr(signal, name), _stop)
     write_handle(srv)
     if auto_ingest:
         srv.start_ingest_loop()

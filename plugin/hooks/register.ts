@@ -226,6 +226,17 @@ function pin(model: string, effort?: string): string {
 async function startDashboard($: any) {
   const bin = `${home}/.local/bin/model-manager`
   const log = `${home}/.model-manager/dashboard.log`
+  const windows = /^[A-Za-z]:\//.test(home)
+  if (windows) {
+    // `start` runs it in its own window, so it outlives this process
+    try {
+      await $.process.run(['cmd', '/c', 'start', '"Usage Optimizer"', '/min', `${bin}.exe`, 'dashboard', '--open'])
+      $.ui.toast('Starting dashboard… it opens in your browser; the pane picks it up within 30 s')
+    } catch {
+      $.ui.toast('Could not start the dashboard. Run: model-manager dashboard --open')
+    }
+    return
+  }
   const cmd = `perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' '${bin}' dashboard --open </dev/null >>'${log}' 2>&1 &`
   try {
     const r: any = await $.process.run(['sh', '-c', cmd])
@@ -275,7 +286,8 @@ function maybeEscalate($: any, where: string) {
 
 export function register(on: any) {
   on('session.start', async ($: any, e: any, next: any) => {
-    home = (await $.env.get('HOME')) ?? ''
+    // Windows usually has no HOME; USERPROFILE is its home folder
+    home = ((await $.env.get('HOME')) || (await $.env.get('USERPROFILE')) || '').replace(/\\/g, '/')
     sessionId = await $.session.id()
     cwd = await $.session.cwd()
     await reload($)
