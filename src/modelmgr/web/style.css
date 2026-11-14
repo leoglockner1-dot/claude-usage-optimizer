@@ -289,3 +289,5 @@ button.rollback { font: inherit; font-size: 12px; padding: 2px 10px; border-radi
 .tool-row:first-child { border-top: 0; }
 .chip.st-active { color: var(--good, #2e9d5b); border-color: color-mix(in srgb, var(--good, #2e9d5b) 50%, transparent); }
 .chip.st-installed { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 50%, transparent); }
+
+.health-spark .spark { height: 40px; }

@@ -285,6 +285,19 @@ def cmd_optimize(a) -> int:
     return 0
 
 
+def cmd_status_line(a) -> int:
+    """One short line for a status line or pane: health score, open findings, monthly saving. Read-only."""
+    conn = db.open_db()
+    h = queries.home(conn)
+    hl = h["health"]
+    if hl["score"] is None:
+        print("UO: not measured yet")
+        return 0
+    save = f" · ≈${hl['avoidable_usd']:.0f}/mo" if hl["avoidable_usd"] else ""
+    print(f"UO: health {hl['score']} · {h['open_findings']} open{save}")
+    return 0
+
+
 def cmd_doctor(a) -> int:
     ok = True
     def check(label, cond, hint=""):
@@ -368,6 +381,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--no-ingest", action="store_true", help="serve the database as it is")
     s.set_defaults(f=cmd_dashboard)
     sub.add_parser("optimize", help="run the Usage Optimizer analyzers and list open findings").set_defaults(f=cmd_optimize)
+    sub.add_parser("status-line", help="print one line: health score, open findings, estimated saving").set_defaults(f=cmd_status_line)
     sub.add_parser("doctor", help="check installation").set_defaults(f=cmd_doctor)
     a = p.parse_args(argv)
     return a.f(a)

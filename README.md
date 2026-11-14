@@ -48,6 +48,39 @@ Security: binds to 127.0.0.1 only. Each start makes a new token; the URL that
 `--open` opens sets it as a cookie. Writes need that cookie, a same-origin
 `Origin` header and JSON, and are validated like `model-manager config`.
 
+## Usage Optimizer
+
+Model Manager is one tool inside the Usage Optimizer. The other tools read the same database
+(`~/.model-manager/mm.db`) and **advise only**: nothing edits your settings or files.
+
+```bash
+usage-optimizer            # dashboard on Home
+model-manager optimize     # run the analyzers, list open findings
+model-manager status-line  # "UO: health 73 · 8 open · ≈$296/mo"
+```
+
+| Tool | Rules |
+| --- | --- |
+| Context & Cache | long contexts, low cache reuse, context rewritten after pauses |
+| Output Lab | high output share, thinking-heavy, and a catalog of tools that shorten replies (caveman, RTK, output style, lower effort, CLAUDE.md reply rule) with detection of what is already active |
+| Waste Radar | repeated file reads, oversized tool results, subagent overuse |
+
+**Usage Health** is a 0-100 score: `100 × (1 − avoidable ÷ spend)` over the last 30 days, where avoidable is the
+sum of the estimated savings of open findings, capped at 60% of spend. The Home page shows the score,
+a 30-day history (one point a day) and the headline "you could save about X a month".
+All savings are estimates in API-equivalent dollars; a finding without a measured number says so.
+
+**Findings lifecycle.** Each finding has a stable id (`tool:rule:scope`) and a status: new, seen, applied or
+ignored. Ignored and applied findings stay hidden. They come back as new only when the estimated saving grew by
+1.5x and at least $5. A reply-shortening recommendation closes itself as applied once its change is detected,
+and after 7 days shows the measured change in output tokens per request.
+
+**Privacy.** Waste Radar reads your Claude Code transcripts locally and read-only, and caches only extracted events (file paths read, tool names, result sizes, no message text)
+under `~/.model-manager/optimizer_cache/`. Nothing leaves your machine.
+
+**Status line.** `model-manager status-line` prints one line and exits. Call it from your own status line
+script, for example `echo "$(model-manager status-line)"`, or from a pane that shells out.
+
 ## Modes
 
 | Mode | Effect |

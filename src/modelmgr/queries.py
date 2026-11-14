@@ -536,6 +536,12 @@ def health(conn: sqlite3.Connection, spend_30d: float | None) -> dict[str, Any]:
             "spend_usd": spend_30d, "rule": "100 × (1 − avoidable ÷ spend), avoidable capped at 60% of spend"}
 
 
+def health_history(conn: sqlite3.Connection, days: int = 30) -> list[dict[str, Any]]:
+    cut = since(days)[:10]
+    return [dict(r) for r in conn.execute(
+        "SELECT day, score, avoidable_usd FROM health_history WHERE day >= ? ORDER BY day", (cut,))]
+
+
 def savings(conn: sqlite3.Connection) -> dict[str, Any]:
     """Estimated savings, always labelled as estimates.
 
@@ -575,6 +581,7 @@ def home(conn: sqlite3.Connection) -> dict[str, Any]:
     open_f = [f for f in findings(conn) if f["status"] in ("new", "seen")]
     return {
         "health": health(conn, ov["est_cost_usd"]),
+        "health_history": health_history(conn, 30),
         "spend": {k: ov[k] for k in ("est_cost_usd", "requests", "sessions", "tokens", "cache_read_share",
                                      "median_context")},
         "daily": daily(conn, 30),

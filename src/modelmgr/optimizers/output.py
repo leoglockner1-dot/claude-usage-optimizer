@@ -201,8 +201,13 @@ def _recommendations(conn: sqlite3.Connection, rules: list[Finding], base_ev: di
         measured = measure(conn, status_ts) if status == "applied" and status_ts else None
         covered = any(state.get(c) == "active" for c in e.get("covers", []))
         want = bool(rules) and state[e["id"]] != "active" and not covered
+        auto = False
         if not want and status != "applied":
-            continue
+            # Leo had this open and the change is now in place: close it as applied
+            if status in ("new", "seen") and state[e["id"]] == "active":
+                auto = True
+            else:
+                continue
         verb = "Enable" if state[e["id"]] == "installed" else "Try"
         summary = f"reduces {e['reduces']}: {e['effect']}"
         ev: dict[str, Any] = {"summary": summary, "catalog_id": e["id"], "state": state[e["id"]],
@@ -214,6 +219,7 @@ def _recommendations(conn: sqlite3.Connection, rules: list[Finding], base_ev: di
                              f"request ({measured['change']:+.0%}) in the 7 days before and after you applied it")
         out.append(Finding(
             tool="output", rule="recommend", scope=e["id"], severity="low", confidence="medium",
-            title=f"{verb}: {e['name']}", evidence=ev,
+            auto_applied=auto,
+            title=f"{'Active' if auto else verb}: {e['name']}", evidence=ev,
             fix=f"{e['install']} Trade-off: {e['tradeoff']}"))
     return out

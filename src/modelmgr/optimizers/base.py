@@ -42,6 +42,7 @@ class Finding:
     est_saving_usd: float | None = None     # per 30 days, API-equivalent estimate
     est_saving_tokens: int | None = None    # per 30 days
     extra: dict[str, Any] = field(default_factory=dict)
+    auto_applied: bool = False              # the change it recommends is already in place
 
     @property
     def id(self) -> str:
@@ -110,10 +111,29 @@ def run_all(conn: sqlite3.Connection, analyzers: dict[str, list[Analyzer]] | Non
             conn.execute("INSERT INTO optimizer_runs VALUES (?,?,?,?)",
                          (now, tool, None if error else len(found), error))
         out["tools"][tool] = {"findings": len(found), "error": error}
+    record_health(conn, now)
     return out
 
 
+# a finding Leo ignored or applied comes back only when its estimated saving grew by this factor (and $)
+REOPEN_FACTOR = 1.5
+REOPEN_MIN_USD = 5.0
+
+
+def record_health(conn: sqlite3.Connection, now: str) -> None:
+    """Store today's Usage Health score for the Home sparkline (one row per day)."""
+    from .. import queries  # late: queries imports this package
+    spend = queries.overview(conn, 30)["est_cost_usd"]
+    h = queries.health(conn, spend)
+    if h["score"] is None:
+        return
+    with conn:
+        conn.execute("INSERT OR REPLACE INTO health_history VALUES (?,?,?,?)",
+                     (now[:10], h["score"], h["avoidable_usd"], h["spend_usd"]))
+
+
 def _upsert(conn: sqlite3.Connection, f: Finding, now: str) -> None:
+    prev = conn.execute("SELECT status, status_saving FROM findings WHERE id = ?", (f.id,)).fetchone()
     ev = json.dumps({**f.evidence, **({"extra": f.extra} if f.extra else {})}, separators=(",", ":"), default=str)
     conn.execute(
         """INSERT INTO findings (id, tool, rule, title, severity, confidence, evidence_json, fix,
@@ -126,13 +146,25 @@ def _upsert(conn: sqlite3.Connection, f: Finding, now: str) -> None:
         (f.id, f.tool, f.rule, f.title, f.severity, f.confidence, ev, f.fix,
          f.est_saving_usd, f.est_saving_tokens, now, now),
     )
+    if prev is None:
+        status = "new"
+    else:
+        status = prev["status"]
+    if f.auto_applied and status in ("new", "seen"):
+        conn.execute("UPDATE findings SET status = 'applied', status_ts = ?, status_saving = NULL WHERE id = ?",
+                     (now, f.id))
+    elif status in ("ignored", "applied") and prev["status_saving"] is not None and f.est_saving_usd is not None:
+        base = prev["status_saving"]
+        if f.est_saving_usd >= base * REOPEN_FACTOR and f.est_saving_usd - base >= REOPEN_MIN_USD:
+            conn.execute("UPDATE findings SET status = 'new', status_ts = ?, status_saving = NULL WHERE id = ?",
+                         (now, f.id))
 
 
 def set_status(conn: sqlite3.Connection, finding_id: str, status: str) -> dict[str, Any]:
     if status not in STATUSES:
         raise ValueError(f"status must be one of {', '.join(STATUSES)}")
     with conn:
-        cur = conn.execute("UPDATE findings SET status = ?, status_ts = ? WHERE id = ?",
+        cur = conn.execute("UPDATE findings SET status = ?, status_ts = ?, status_saving = est_saving_usd WHERE id = ?",
                            (status, db.now_iso(), finding_id))
     if cur.rowcount == 0:
         raise KeyError(finding_id)

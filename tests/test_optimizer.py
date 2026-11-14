@@ -47,7 +47,7 @@ class OptimizerTest(unittest.TestCase):
         self.conn.execute("UPDATE schema_version SET version = 1")
         self.conn.commit()
         db.init(self.conn)
-        self.assertEqual(self.conn.execute("SELECT version FROM schema_version").fetchone()[0], 2)
+        self.assertEqual(self.conn.execute("SELECT version FROM schema_version").fetchone()[0], db.SCHEMA_VERSION)
 
     def test_run_upserts_and_keeps_status(self):
         from modelmgr import optimizers, queries
@@ -131,6 +131,66 @@ class OptimizerTest(unittest.TestCase):
         from modelmgr import ingest
         ingest.run(self.conn)
 
+    # ---- phase 5: lifecycle, health history, status line ----
 
-if __name__ == "__main__":
-    unittest.main()
+    def test_ignored_stays_hidden_until_saving_jumps(self):
+        from modelmgr import optimizers, queries
+        run = lambda sv: optimizers.run_all(self.conn, {"context": [lambda c: [self.finding(saving=sv)]]})  # noqa: E731
+        run(10.0)
+        fid = "context:bloat:alpha"
+        optimizers.set_status(self.conn, fid, "ignored")
+        run(12.0)
+        self.assertEqual(self.status(fid), "ignored")
+        run(16.0)                       # 1.6x but only +$6: re-opens
+        self.assertEqual(self.status(fid), "new")
+        optimizers.set_status(self.conn, fid, "ignored")
+        run(18.0)                       # 1.1x of 16
+        self.assertEqual(self.status(fid), "ignored")
+        self.assertEqual([f for f in queries.findings(self.conn) if f["status"] in ("new", "seen")], [])
+
+    def test_small_absolute_jump_does_not_reopen(self):
+        from modelmgr import optimizers
+        run = lambda sv: optimizers.run_all(self.conn, {"context": [lambda c: [self.finding(saving=sv)]]})  # noqa: E731
+        run(1.0)
+        optimizers.set_status(self.conn, "context:bloat:alpha", "ignored")
+        run(3.0)                        # 3x but only +$2
+        self.assertEqual(self.status("context:bloat:alpha"), "ignored")
+
+    def test_auto_applied_closes_open_finding(self):
+        from modelmgr import optimizers
+        from modelmgr.optimizers import Finding
+        optimizers.run_all(self.conn, {"context": [lambda c: [self.finding()]]})
+        def auto(c):
+            f = self.finding()
+            f.auto_applied = True
+            return [f]
+        optimizers.run_all(self.conn, {"context": [auto]})
+        self.assertEqual(self.status("context:bloat:alpha"), "applied")
+
+    def test_health_history_one_row_per_day(self):
+        from modelmgr import optimizers, queries
+        self.assertEqual(queries.health_history(self.conn), [])
+        self.conn.execute("""INSERT INTO requests (request_key, session_id, ts, model, input_tokens, output_tokens,
+                             cache_write_5m, cache_write_1h, cache_read, est_cost_usd)
+                             VALUES ('k','s',?, 'claude-opus-5-5', 1, 1, 0, 0, 0, 100.0)""",
+                          (queries.since(1),))
+        self.conn.commit()
+        optimizers.run_all(self.conn, {"context": [lambda c: [self.finding(saving=20.0)]]})
+        optimizers.run_all(self.conn, {"context": [lambda c: [self.finding(saving=20.0)]]})
+        hist = queries.health_history(self.conn)
+        self.assertEqual(len(hist), 1)
+        self.assertEqual(hist[0]["score"], 80)
+        self.assertEqual(queries.home(self.conn)["health_history"], hist)
+
+    def test_status_line(self):
+        import contextlib
+        import io
+        from modelmgr import cli
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            cli.main(["status-line"])
+        self.assertEqual(buf.getvalue().strip(), "UO: not measured yet")
+
+    def status(self, fid):
+        return self.conn.execute("SELECT status FROM findings WHERE id = ?", (fid,)).fetchone()[0]
+

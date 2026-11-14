@@ -8,7 +8,7 @@ from pathlib import Path
 
 from . import paths, registry
 
-SCHEMA_VERSION = 2  # 2: findings table (Usage Optimizer)
+SCHEMA_VERSION = 3  # 2: findings table (Usage Optimizer); 3: health_history, findings.status_saving
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
@@ -103,9 +103,13 @@ CREATE TABLE IF NOT EXISTS findings (
   id TEXT PRIMARY KEY, tool TEXT NOT NULL, rule TEXT NOT NULL, title TEXT, severity TEXT, confidence TEXT,
   evidence_json TEXT, fix TEXT, est_saving_usd REAL, est_saving_tokens INTEGER,
   status TEXT NOT NULL DEFAULT 'new', active INTEGER NOT NULL DEFAULT 1,
-  first_seen TEXT, last_seen TEXT, status_ts TEXT
+  first_seen TEXT, last_seen TEXT, status_ts TEXT,
+  status_saving REAL  -- est_saving_usd when Leo set the status; a later 1.5x jump re-opens the finding
 );
 CREATE INDEX IF NOT EXISTS ix_findings_tool ON findings(tool, active);
+
+-- one Usage Health score per day (the latest run of the day wins)
+CREATE TABLE IF NOT EXISTS health_history (day TEXT PRIMARY KEY, score INTEGER, avoidable_usd REAL, spend_usd REAL);
 
 CREATE TABLE IF NOT EXISTS optimizer_runs (ts TEXT, tool TEXT, findings INTEGER, error TEXT);
 
@@ -145,6 +149,8 @@ def init(conn: sqlite3.Connection) -> None:
     elif row[0] < SCHEMA_VERSION:
         # every change so far is additive (CREATE IF NOT EXISTS above); just record the new version
         conn.execute("UPDATE schema_version SET version = ?", (SCHEMA_VERSION,))
+    if "status_saving" not in {r[1] for r in conn.execute("PRAGMA table_info(findings)")}:
+        conn.execute("ALTER TABLE findings ADD COLUMN status_saving REAL")
     registry.seed(conn)
     conn.commit()
 

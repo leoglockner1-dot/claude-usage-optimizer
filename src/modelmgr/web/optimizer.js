@@ -95,6 +95,22 @@ const Optimizer = (() => {
     svgEl("path", { d: line, class: "line", "vector-effect": "non-scaling-stroke" }, s);
   }
 
+  function healthSpark(container, note, rows) {
+    container.replaceChildren();
+    note.textContent = "";
+    if (rows.length < 2) {
+      note.textContent = rows.length ? "Score history builds up one point a day." : "";
+      return;
+    }
+    const W = 300, H = 40;
+    const s = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none", class: "spark", "aria-hidden": "true" }, container);
+    const pts = rows.map((d, i) => [(i / (rows.length - 1)) * W, H - 3 - (d.score / 100) * (H - 6)]);
+    svgEl("path", { d: pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(""),
+      class: "line", "vector-effect": "non-scaling-stroke" }, s);
+    const first = rows[0].score, last = rows[rows.length - 1].score;
+    note.textContent = `Score ${first} → ${last} over ${rows.length} days`;
+  }
+
   function empty(container, head, text) {
     const e = h("div", "card glass empty fade-in", container);
     h("strong", null, e, head);
@@ -179,6 +195,8 @@ const Optimizer = (() => {
       head.textContent = hl.avoidable_usd ? `You could save about ${usd(hl.avoidable_usd)} a month` : "No avoidable spend found";
       document.getElementById("hm-rule").textContent = `Estimate. Score = ${hl.rule}.`;
     }
+    document.getElementById("hm-ring").title = `Usage health: ${hl.rule}. Avoidable spend is capped so one bad day cannot drive the score to 0.`;
+    healthSpark(document.getElementById("hm-hspark"), document.getElementById("hm-hspark-note"), home.health_history || []);
     const sp = home.spend;
     document.getElementById("hm-spend").textContent = usd(sp.est_cost_usd);
     spark(document.getElementById("hm-spark"), home.daily);
