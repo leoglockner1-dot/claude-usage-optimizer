@@ -270,9 +270,8 @@ class WebTest(unittest.TestCase):
                                  "from modelmgr import web; web.serve(port=0, auto_ingest=False)"],
                                 env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         try:
-            for _ in range(100):
-                if paths.dashboard_path().exists():
-                    break
+            deadline = time.time() + 30  # CI runners can take many seconds to start Python
+            while time.time() < deadline and not paths.dashboard_path().exists():
                 time.sleep(0.05)
             self.assertTrue(paths.dashboard_path().exists())
             proc.send_signal(signal.SIGHUP)
