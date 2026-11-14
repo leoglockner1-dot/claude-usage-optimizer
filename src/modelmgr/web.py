@@ -3,7 +3,7 @@
 Binds to 127.0.0.1 only. A random token is created per start; the URL printed by the CLI carries
 it once, the server swaps it for a SameSite=Strict cookie, and every API call needs that cookie or
 the X-MM-Token header. The Host header must name this server (blocks DNS rebinding). Writes are
-POST /api/config, /api/killswitch, /api/grade and /api/rollback only: JSON bodies, same Origin, validated like the CLI.
+POST /api/config, /api/killswitch, /api/grade, /api/rollback and /api/finding-status only: JSON bodies, same Origin, validated like the CLI.
 """
 
 from __future__ import annotations
@@ -181,8 +181,25 @@ def api_policy(conn, qs, parts, state) -> dict[str, Any]:
     return out
 
 
+def post_finding_status(body: Any, conn: sqlite3.Connection) -> dict[str, Any]:
+    """{"id": "context:bloat:alpha", "status": "applied"}: Leo's status for one finding."""
+    from . import optimizers
+    if not isinstance(body, dict):
+        raise BadRequest("send a JSON object")
+    fid, status = body.get("id"), body.get("status")
+    if not isinstance(fid, str) or not 0 < len(fid) <= 200:
+        raise BadRequest("id must be a finding id")
+    if status not in optimizers.STATUSES:
+        raise BadRequest(f"status must be one of {', '.join(optimizers.STATUSES)}")
+    try:
+        return optimizers.set_status(conn, fid, status)
+    except KeyError:
+        raise BadRequest(f"no finding {fid}") from None
+
+
 # handlers that take a DB connection as second argument
-POSTS_DB: dict[str, Callable[[Any, sqlite3.Connection], Any]] = {"grade": post_grade, "rollback": post_rollback}
+POSTS_DB: dict[str, Callable[[Any, sqlite3.Connection], Any]] = {
+    "grade": post_grade, "rollback": post_rollback, "finding-status": post_finding_status}
 POSTS: dict[str, Callable[[Any], Any]] = {"config": post_config, "killswitch": post_killswitch}
 
 
@@ -210,6 +227,10 @@ ROUTES: dict[str, Callable[..., Any]] = {
     "models": api_models,
     "config": api_config,
     "policy": api_policy,
+    # Usage Optimizer
+    "home": lambda c, q, p, s: queries.home(c),
+    "findings": lambda c, q, p, s: queries.findings(c, include_inactive=(q.get("all") or [""])[0] == "1"),
+    "tools": lambda c, q, p, s: queries.optimizer_tools(c),
 }
 
 
@@ -224,6 +245,8 @@ class DashboardServer(ThreadingHTTPServer):
         self.token = token or secrets.token_urlsafe(24)
         self.db_path = db_path
         self.state: dict[str, Any] = {}
+        # bring the schema up to date once (additive tables such as findings), also with --no-ingest
+        db.open_db(db_path).close()
 
     @property
     def port(self) -> int:

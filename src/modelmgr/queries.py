@@ -411,7 +411,17 @@ def summary(conn: sqlite3.Connection) -> dict[str, Any]:
         "quota": q[-1] if q else None,
         "last_route": None if lr is None else {k: lr[k] for k in (
             "ts", "category", "complexity", "chosen_model", "chosen_effort", "applied", "reason", "mode")},
+        # Usage Optimizer: the highest-ranked open finding, for the pane and status line
+        "top_finding": _top_finding(conn),
     }
+
+
+def _top_finding(conn: sqlite3.Connection) -> dict[str, Any] | None:
+    try:
+        f = next((f for f in findings(conn) if f["status"] in ("new", "seen")), None)
+    except sqlite3.Error:
+        return None
+    return None if f is None else {k: f[k] for k in ("id", "tool", "title", "severity", "est_saving_usd")}
 
 
 def write_summary(conn: sqlite3.Connection) -> Any:
@@ -429,3 +439,69 @@ def write_summary(conn: sqlite3.Connection) -> Any:
             os.unlink(tmp)
         raise
     return target
+
+
+# ---------- Usage Optimizer ----------
+
+_SEV_RANK = {"high": 0, "medium": 1, "low": 2}
+
+
+def findings(conn: sqlite3.Connection, include_inactive: bool = False) -> list[dict[str, Any]]:
+    """Findings ranked: open before applied/ignored, then severity, then estimated saving."""
+    where = "" if include_inactive else "WHERE active = 1"
+    out = []
+    for r in conn.execute(f"SELECT * FROM findings {where}"):
+        d = dict(r)
+        d["evidence"] = json.loads(d.pop("evidence_json") or "{}")
+        d["active"] = bool(d["active"])
+        out.append(d)
+    out.sort(key=lambda f: (f["status"] in ("applied", "ignored"), _SEV_RANK.get(f["severity"], 3),
+                            -(f["est_saving_usd"] or 0)))
+    return out
+
+
+def optimizer_tools(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Each optimizer tool with its last run and open finding count. ran = None: never ran."""
+    from .optimizers import base
+    base._load_builtin()
+    reg = base.registered()
+    last = {r["tool"]: dict(r) for r in conn.execute(
+        "SELECT tool, MAX(ts) AS ts, findings, error FROM optimizer_runs GROUP BY tool")}
+    open_n = {r[0]: r[1] for r in conn.execute(
+        "SELECT tool, COUNT(*) FROM findings WHERE active = 1 AND status IN ('new','seen') GROUP BY tool")}
+    return [{"tool": t, **meta, "built": t in reg, "last_run": last.get(t, {}).get("ts"),
+             "error": last.get(t, {}).get("error"), "open": open_n.get(t, 0)}
+            for t, meta in base.TOOLS.items()]
+
+
+def health(conn: sqlite3.Connection, spend_30d: float | None) -> dict[str, Any]:
+    """Usage health 0–100 = share of the last 30 days' spend not flagged as avoidable.
+
+    Avoidable = sum of estimated savings of open findings, capped at 60% of spend so one finding
+    cannot drive the score to 0. None (not measured) until at least one analyzer has run.
+    """
+    ran = conn.execute("SELECT COUNT(*) FROM optimizer_runs WHERE error IS NULL").fetchone()[0]
+    avoidable = conn.execute("""SELECT SUM(est_saving_usd) FROM findings
+                                WHERE active = 1 AND status IN ('new','seen')""").fetchone()[0]
+    if not ran or not spend_30d:
+        return {"score": None, "avoidable_usd": _r(avoidable), "spend_usd": spend_30d,
+                "rule": "needs at least one analyzer run and spend in the last 30 days"}
+    capped = min(avoidable or 0.0, 0.6 * spend_30d)
+    return {"score": round(100 * (1 - capped / spend_30d)), "avoidable_usd": _r(avoidable or 0.0),
+            "spend_usd": spend_30d, "rule": "100 × (1 − avoidable ÷ spend), avoidable capped at 60% of spend"}
+
+
+def home(conn: sqlite3.Connection) -> dict[str, Any]:
+    ov = overview(conn, 30)
+    open_f = [f for f in findings(conn) if f["status"] in ("new", "seen")]
+    return {
+        "health": health(conn, ov["est_cost_usd"]),
+        "spend": {k: ov[k] for k in ("est_cost_usd", "requests", "sessions", "tokens", "cache_read_share",
+                                     "median_context")},
+        "daily": daily(conn, 30),
+        "top": open_f[:3],
+        "open_findings": len(open_f),
+        "tools": optimizer_tools(conn),
+        "mm": {"mode": config.load().get("mode"), "disabled": paths.disabled_flag().exists(),
+               "savings": ov["savings"], "last_route": last_route(conn)},
+    }

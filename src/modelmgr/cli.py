@@ -9,7 +9,7 @@ import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
 
-from . import __version__, backfill, config, db, ingest, paths, policy, registry
+from . import __version__, backfill, config, db, ingest, paths, policy, queries, registry
 
 
 # ---------- formatting ----------
@@ -270,6 +270,21 @@ def cmd_dashboard(a) -> int:
     return web.serve(port=a.port, open_browser=a.open, auto_ingest=not a.no_ingest)
 
 
+def cmd_optimize(a) -> int:
+    from . import optimizers
+    conn = db.open_db()
+    run = optimizers.run_all(conn)
+    for tool, r in run["tools"].items():
+        print(f"  {tool}: {'error ' + r['error'] if r['error'] else str(r['findings']) + ' findings'}")
+    if not run["tools"]:
+        print("No analyzers built yet.")
+    for f in queries.findings(conn):
+        if f["status"] in ("new", "seen"):
+            save = f" · ~${f['est_saving_usd']:.2f}/30d" if f["est_saving_usd"] else ""
+            print(f"[{f['severity']}] {f['title']}{save}\n    fix: {f['fix']}")
+    return 0
+
+
 def cmd_doctor(a) -> int:
     ok = True
     def check(label, cond, hint=""):
@@ -352,9 +367,15 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--open", action="store_true", help="open it in the browser")
     s.add_argument("--no-ingest", action="store_true", help="serve the database as it is")
     s.set_defaults(f=cmd_dashboard)
+    sub.add_parser("optimize", help="run the Usage Optimizer analyzers and list open findings").set_defaults(f=cmd_optimize)
     sub.add_parser("doctor", help="check installation").set_defaults(f=cmd_doctor)
     a = p.parse_args(argv)
     return a.f(a)
+
+
+def main_uo(argv: list[str] | None = None) -> int:
+    """`usage-optimizer [--port N] [--no-ingest]`: the dashboard, opened in the browser on Home."""
+    return main(["dashboard", "--open", *(sys.argv[1:] if argv is None else argv)])
 
 
 if __name__ == "__main__":

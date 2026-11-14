@@ -2,15 +2,15 @@
 
 const { html } = Charts;
 const REFRESH_MS = 60_000; // the server ingests every 30 s
-const PAGES = ["overview", "context", "projects", "session", "routing", "policy", "quota", "models", "settings"];
-const NO_PERIOD = new Set(["session", "policy", "models", "settings"]); // pages that ignore the period filter
+const PAGES = ["home", "findings", "tool", "overview", "context", "projects", "session", "routing", "policy", "quota", "models", "settings"];
+const NO_PERIOD = new Set(["home", "findings", "tool", "session", "policy", "models", "settings"]); // pages that ignore the period filter
 const TAB_OF = { session: "projects" };
 
 // colour follows the model family, never its rank in the current period
 const FAMILY_CLASS = { opus: "s1", sonnet: "s2", haiku: "s3", fable: "s4" };
 
 // state.project filters the sessions table; state.session is the open session id
-const state = { page: "overview", days: "30", project: null, session: null, data: {} };
+const state = { page: "home", days: "30", project: null, session: null, tool: null, data: {} };
 
 // ---------- formatting ----------
 
@@ -98,6 +98,7 @@ async function post(path, value) {
 }
 
 const LOADERS = {
+  ...Optimizer.LOADERS,
   overview: (q) => Promise.all([api(`overview?${q}`), api(`daily?${q}`), api(`model-mix?${q}`)])
     .then(([overview, daily, mix]) => ({ overview, daily, mix })),
   context: (q) => Promise.all([api(`overview?${q}`), api(`context?${q}`), api(`context-daily?${q}`)])
@@ -130,6 +131,7 @@ async function load() {
     state.data[page] = data;
     err.hidden = true;
     renderStatus(status);
+    Optimizer.renderNav(status);
     render();
   } catch (e) {
     // keep the last render on screen; say what failed
@@ -878,6 +880,7 @@ document.getElementById("st-discard").addEventListener("click", () => {
 window.addEventListener("beforeunload", (e) => { if (st.draft && changedKeys().length) e.preventDefault(); });
 
 const RENDER = {
+  ...Optimizer.RENDER,
   overview: renderOverview, context: renderContext, projects: renderProjects, session: renderSession,
   routing: renderRouting, policy: renderPolicy, quota: renderQuota, models: renderModels, settings: renderSettings,
 };
@@ -887,32 +890,38 @@ function render() {
   for (const p of PAGES) document.getElementById(`page-${p}`).hidden = p !== state.page;
   const tab = TAB_OF[state.page] || state.page;
   document.querySelectorAll("#tabs a").forEach((a) => {
-    a.setAttribute("aria-current", a.dataset.page === tab ? "page" : "false");
-    a.href = hashFor(a.dataset.page);
+    const on = a.dataset.page === tab && (!a.dataset.tool || a.dataset.tool === state.tool);
+    a.setAttribute("aria-current", on ? "page" : "false");
+    a.href = hashFor(a.dataset.page, a.dataset.tool ? { t: a.dataset.tool } : {});
   });
   document.getElementById("period").hidden = NO_PERIOD.has(state.page);
+  document.getElementById("page-title").textContent = Optimizer.title(state.page, state.tool);
   document.querySelectorAll("#period button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.days === state.days));
   const data = state.data[state.page];
   // a different session or project filter than the cached render: wait for fresh data
-  if (data && !(state.page === "session" && data.id !== state.session)) RENDER[state.page](data);
+  if (data && !(state.page === "session" && data.id !== state.session) && !(state.page === "tool" && data.tool !== state.tool)) {
+    RENDER[state.page](data);
+  }
 }
 
 // ---------- navigation: #page?days=N[&project=…][&id=…] ----------
 
 function readHash() {
   const [page, query] = location.hash.slice(1).split("?");
-  state.page = PAGES.includes(page) ? page : "overview";
+  state.page = PAGES.includes(page) ? page : "home";
   const q = new URLSearchParams(query || "");
   const days = q.get("days");
   if (["1", "7", "30", "all"].includes(days)) state.days = days;
   if (state.page === "projects") state.project = q.get("project");
   if (state.page === "session") state.session = q.get("id");
+  if (state.page === "tool") state.tool = Optimizer.TOOL_IDS.includes(q.get("t")) ? q.get("t") : "context";
 }
 
 function writeHash() {
   const extra = {};
   if (state.page === "projects" && state.project) extra.project = state.project;
   if (state.page === "session" && state.session) extra.id = state.session;
+  if (state.page === "tool" && state.tool) extra.t = state.tool;
   history.replaceState(null, "", hashFor(state.page, extra));
 }
 
@@ -931,6 +940,7 @@ document.getElementById("tabs").addEventListener("click", (e) => {
   if (!a) return;
   e.preventDefault();
   state.page = a.dataset.page;
+  state.tool = a.dataset.tool || null;
   state.project = null;
   writeHash();
   render();

@@ -180,6 +180,11 @@ def run(conn: sqlite3.Connection | None = None, min_age_s: float = MIN_AGE_S) ->
     except Exception:  # noqa: BLE001 - learning must never break ingest
         pass
     try:
+        from . import optimizers  # Usage Optimizer analyzers: read-only SQL, findings table only
+        optimizers.run_all(conn)
+    except Exception:  # noqa: BLE001 - analyzers must never break ingest
+        pass
+    try:
         queries.write_summary(conn)
     except (OSError, sqlite3.Error):
         pass  # the summary is a convenience for the pane; ingest must never fail because of it

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from . import paths, registry
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2  # 2: findings table (Usage Optimizer)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
@@ -97,6 +97,18 @@ CREATE TABLE IF NOT EXISTS benchmark_runs (
   retries INTEGER, notes TEXT
 );
 
+-- Usage Optimizer: one row per finding, keyed by a stable id (tool:rule[:scope]) so status survives reruns.
+-- active = produced by the latest run; status is Leo's: new / seen / applied / ignored.
+CREATE TABLE IF NOT EXISTS findings (
+  id TEXT PRIMARY KEY, tool TEXT NOT NULL, rule TEXT NOT NULL, title TEXT, severity TEXT, confidence TEXT,
+  evidence_json TEXT, fix TEXT, est_saving_usd REAL, est_saving_tokens INTEGER,
+  status TEXT NOT NULL DEFAULT 'new', active INTEGER NOT NULL DEFAULT 1,
+  first_seen TEXT, last_seen TEXT, status_ts TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_findings_tool ON findings(tool, active);
+
+CREATE TABLE IF NOT EXISTS optimizer_runs (ts TEXT, tool TEXT, findings INTEGER, error TEXT);
+
 CREATE TABLE IF NOT EXISTS ingest_files (path TEXT PRIMARY KEY, mtime REAL, size INTEGER, ts TEXT);
 
 CREATE VIEW IF NOT EXISTS v_task_cost AS
@@ -130,6 +142,9 @@ def init(conn: sqlite3.Connection) -> None:
     row = conn.execute("SELECT version FROM schema_version").fetchone()
     if row is None:
         conn.execute("INSERT INTO schema_version(version) VALUES (?)", (SCHEMA_VERSION,))
+    elif row[0] < SCHEMA_VERSION:
+        # every change so far is additive (CREATE IF NOT EXISTS above); just record the new version
+        conn.execute("UPDATE schema_version SET version = ?", (SCHEMA_VERSION,))
     registry.seed(conn)
     conn.commit()
 

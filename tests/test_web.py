@@ -74,7 +74,7 @@ class WebTest(unittest.TestCase):
         self.assertIn("SameSite=Strict", cookie)
         r, body = self.get("/", {"Cookie": cookie.split(";")[0]})
         self.assertEqual(r.status, 200)
-        self.assertIn(b"AI Model Manager", body)
+        self.assertIn(b"Usage Optimizer", body)
         self.assertIn("default-src 'self'", r.getheader("Content-Security-Policy"))
 
     def test_rejects_foreign_host(self):
@@ -171,6 +171,28 @@ class WebTest(unittest.TestCase):
                     {"route_id": 7, "verdict": "right", "note": "x" * 501}):
             self.assertEqual(self.post("grade", bad)[0], 400, bad)
         self.assertEqual(self.post("grade", {"route_id": 7, "verdict": "right"}, {"Origin": None})[0], 403)
+
+    def test_optimizer_endpoints(self):
+        from modelmgr import db, optimizers
+        from modelmgr.optimizers import Finding
+        st, home = self.api("home")
+        self.assertEqual(st, 200)
+        self.assertIsNone(home["health"]["score"])
+        self.assertEqual(self.api("tools")[0], 200)
+        conn = db.open_db()
+        optimizers.run_all(conn, {"output": [lambda c: [Finding(tool="output", rule="verbose", title="Long replies",
+                                                                evidence={"n": 3}, fix="answer first")]]})
+        conn.close()
+        st, fs = self.api("findings")
+        self.assertEqual([f["id"] for f in fs], ["output:verbose"])
+        st, out = self.post("finding-status", {"id": "output:verbose", "status": "applied"})
+        self.assertEqual((st, out["status"]), (200, "applied"))
+        self.assertEqual(self.post("finding-status", {"id": "output:verbose", "status": "done"})[0], 400)
+        self.assertEqual(self.post("finding-status", {"id": "nope", "status": "seen"})[0], 400)
+        self.assertEqual(self.post("finding-status", {"id": "output:verbose", "status": "seen"}, {"Origin": None})[0], 403)
+        for f in ("optimizer.js", "theme.js"):
+            r, _ = self.get(f"/{f}", {"X-MM-Token": "t0ken"})
+            self.assertEqual(r.status, 200)
 
     def test_policy_page_and_rollback(self):
         from modelmgr import policy

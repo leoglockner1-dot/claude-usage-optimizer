@@ -3,23 +3,40 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Model Manager</title>
+<title>Usage Optimizer</title>
 <link rel="stylesheet" href="style.css">
+<script src="theme.js"></script>
 </head>
 <body>
+<div class="app">
+<aside class="side">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <span><strong>Usage Optimizer</strong><span class="brand-sub">for Claude Code</span></span>
+  </div>
+  <nav id="tabs" aria-label="Pages">
+    <a href="#home" data-page="home"><span class="nav-ico i-home" aria-hidden="true"></span>Home</a>
+    <a href="#findings" data-page="findings"><span class="nav-ico i-find" aria-hidden="true"></span>Findings<span class="badge" id="badge-all" hidden></span></a>
+    <div class="nav-group">Optimizers</div>
+    <a href="#tool" data-page="tool" data-tool="context" class="t-context"><span class="nav-ico i-tool" aria-hidden="true"></span>Context &amp; Cache<span class="badge" id="badge-context" hidden></span></a>
+    <a href="#tool" data-page="tool" data-tool="output" class="t-output"><span class="nav-ico i-tool" aria-hidden="true"></span>Output Lab<span class="badge" id="badge-output" hidden></span></a>
+    <a href="#tool" data-page="tool" data-tool="waste" class="t-waste"><span class="nav-ico i-tool" aria-hidden="true"></span>Waste Radar<span class="badge" id="badge-waste" hidden></span></a>
+    <div class="nav-group">Model Manager <span class="nav-mode" id="nav-mode"></span></div>
+    <a href="#overview" data-page="overview">Overview</a>
+    <a href="#context" data-page="context">Context</a>
+    <a href="#projects" data-page="projects">Projects</a>
+    <a href="#routing" data-page="routing">Routing</a>
+    <a href="#policy" data-page="policy">Policy</a>
+    <a href="#quota" data-page="quota">Quota</a>
+    <a href="#models" data-page="models">Models</a>
+    <a href="#settings" data-page="settings">Settings</a>
+  </nav>
+  <button type="button" id="theme-toggle" class="theme-toggle">Light theme</button>
+</aside>
+<div class="content">
 <header>
   <div class="bar">
-    <h1>AI Model Manager</h1>
-    <nav id="tabs">
-      <a href="#overview" data-page="overview">Overview</a>
-      <a href="#context" data-page="context">Context</a>
-      <a href="#projects" data-page="projects">Projects</a>
-      <a href="#routing" data-page="routing">Routing</a>
-      <a href="#policy" data-page="policy">Policy</a>
-      <a href="#quota" data-page="quota">Quota</a>
-      <a href="#models" data-page="models">Models</a>
-      <a href="#settings" data-page="settings">Settings</a>
-    </nav>
+    <h1 id="page-title">Home</h1>
     <span id="status" class="muted">Loading…</span>
   </div>
   <div class="filters" id="period" role="group" aria-label="Period">
@@ -31,6 +48,39 @@
 </header>
 <main>
   <p id="error" class="error" hidden></p>
+
+  <section id="page-home" hidden>
+    <div class="hero-row">
+      <div class="card glass hero-health">
+        <div id="hm-ring" class="ring-wrap"></div>
+        <div class="hero-text">
+          <div class="eyebrow">Usage health · last 30 days</div>
+          <div class="hero-head" id="hm-head"></div>
+          <p class="sub" id="hm-rule"></p>
+        </div>
+      </div>
+      <div class="card glass hero-spend">
+        <div class="eyebrow">API-equivalent spend · 30 days</div>
+        <div class="hero-num" id="hm-spend"></div>
+        <div class="plot" id="hm-spark"></div>
+        <p class="sub" id="hm-spend-sub"></p>
+      </div>
+    </div>
+    <h2 class="section-title">Top findings</h2>
+    <div id="hm-top" class="finding-list"></div>
+    <h2 class="section-title">Tools</h2>
+    <div id="hm-tools" class="tool-grid"></div>
+  </section>
+
+  <section id="page-findings" hidden>
+    <div class="chips" id="fd-filter" role="group" aria-label="Show"></div>
+    <div id="fd-list" class="finding-list"></div>
+  </section>
+
+  <section id="page-tool" hidden>
+    <div class="card glass tool-hero" id="tl-hero"></div>
+    <div id="tl-list" class="finding-list"></div>
+  </section>
 
   <section id="page-overview" hidden>
     <div class="tiles" id="ov-tiles"></div>
@@ -213,7 +263,10 @@
     </form>
   </section>
 </main>
+</div>
+</div>
 <script src="charts.js"></script>
+<script src="optimizer.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

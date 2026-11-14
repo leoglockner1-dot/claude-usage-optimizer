@@ -8,6 +8,7 @@ dependencies = []
 
 [project.scripts]
 model-manager = "modelmgr.cli:main"
+usage-optimizer = "modelmgr.cli:main_uo"
 
 [build-system]
 requires = ["hatchling"]
