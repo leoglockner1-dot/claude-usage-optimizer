@@ -21,7 +21,7 @@ Screenshots use made-up data from `scripts/demo_data.py`.
 Model Manager starts in **observe** mode: it records and shows what it would pick, but
 never changes the model until you switch the mode.
 
-Requirements: macOS or Linux (Windows is untested), git, Python 3.11 or later, [uv](https://docs.astral.sh/uv/), and Claude Code 2.1.287 or later for the mod.
+Requirements: macOS, Linux or Windows (tests run on all three in CI), git, Python 3.11 or later, [uv](https://docs.astral.sh/uv/), and Claude Code 2.1.287 or later for the mod.
 The dashboard and the optimizer also work without the mod, on your existing Claude Code transcripts.
 
 ## Parts

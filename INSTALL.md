@@ -5,9 +5,9 @@ then explain the tool to the user. Ask before running anything outside this list
 
 ## 1. Check requirements
 
-- macOS or Linux. Windows is untested; tell the user so before going on.
+- macOS, Linux or Windows. On Windows, run the commands below in PowerShell.
 - `git --version` must work.
-- `python3 --version` must be 3.11 or later.
+- `python3 --version` must be 3.11 or later (on Windows: `python --version` or `py --version`).
 - `uv --version` must work. If not, tell the user to install uv (https://docs.astral.sh/uv/) and stop.
 
 ## 2. Install
