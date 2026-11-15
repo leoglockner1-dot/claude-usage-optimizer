@@ -240,6 +240,8 @@ ROUTES: dict[str, Callable[..., Any]] = {
 
 class DashboardServer(ThreadingHTTPServer):
     daemon_threads = True
+    # Windows: reuse would let two servers share a port; it also clashes with SO_EXCLUSIVEADDRUSE
+    allow_reuse_address = sys.platform != "win32"
 
     def __init__(self, port: int = DEFAULT_PORT, token: str | None = None, db_path: Path | None = None):
         self._stop = threading.Event()  # before bind: a failed bind calls server_close()
@@ -253,7 +255,11 @@ class DashboardServer(ThreadingHTTPServer):
     def server_bind(self) -> None:
         # HTTPServer.server_bind() looks up the host's FQDN, a reverse DNS call that can hang for
         # many seconds on macOS. The name is unused on 127.0.0.1, so bind without it.
+        import socket
         import socketserver
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            # Windows: SO_REUSEADDR lets a second server take a port that is in use; refuse instead
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
         socketserver.TCPServer.server_bind(self)
         self.server_name, self.server_port = "127.0.0.1", self.server_address[1]
 
