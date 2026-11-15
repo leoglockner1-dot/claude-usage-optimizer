@@ -154,7 +154,7 @@ class QueriesTest(unittest.TestCase):
 
     def test_ingest_writes_summary(self):
         from modelmgr import ingest, paths
-        f = paths.spool_dir() / f"{time.time_ns()}.json"
+        f = paths.spool_dir() / f"{time.time_ns()}-{os.urandom(4).hex()}.json"
         f.write_text(json.dumps({"v": 1, "events": [self._req("x", hours_ago=0.1)]}))
         old = time.time() - 10
         os.utime(f, (old, old))

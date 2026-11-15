@@ -45,7 +45,7 @@ class CoreTest(unittest.TestCase):
 
     def _spool(self, events, age=10):
         from modelmgr import paths
-        f = paths.spool_dir() / f"{time.time_ns()}.json"
+        f = paths.spool_dir() / f"{time.time_ns()}-{os.urandom(4).hex()}.json"  # Windows clock ticks ~15 ms: names must not collide
         f.write_text(json.dumps({"v": 1, "events": events}))
         old = time.time() - age
         os.utime(f, (old, old))
