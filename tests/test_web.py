@@ -11,7 +11,7 @@ from pathlib import Path
 
 class WebTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
+        self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         os.environ["MM_HOME"] = str(Path(self.tmp.name) / "mm")
         os.environ["MM_CLAUDE_PROJECTS"] = str(Path(self.tmp.name) / "projects")
         from modelmgr import cli, db, ingest, web
@@ -245,7 +245,8 @@ class WebTest(unittest.TestCase):
         from modelmgr import paths, web
         path = web.write_handle(self.srv)
         self.assertEqual(path, paths.dashboard_path())
-        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        if sys.platform != "win32":  # Windows has no Unix file modes
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
         h = json.loads(path.read_text())
         self.assertEqual(h["url"], self.srv.url())
         self.assertIn("t0ken", h["url"])

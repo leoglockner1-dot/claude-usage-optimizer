@@ -8,7 +8,7 @@ from pathlib import Path
 
 class OutputAnalyzerTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
+        self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         root = Path(self.tmp.name)
         os.environ["MM_HOME"] = str(root / "mm")
         os.environ["MM_CLAUDE_PROJECTS"] = str(root / "projects")

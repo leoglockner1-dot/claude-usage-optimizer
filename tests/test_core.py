@@ -8,7 +8,7 @@ from pathlib import Path
 
 class CoreTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
+        self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         os.environ["MM_HOME"] = str(Path(self.tmp.name) / "mm")
         os.environ["MM_CLAUDE_PROJECTS"] = str(Path(self.tmp.name) / "projects")
         from modelmgr import cli

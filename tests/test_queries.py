@@ -19,7 +19,7 @@ def usage(inp=1000, out=500, read=0, write=0):
 
 class QueriesTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
+        self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         os.environ["MM_HOME"] = str(Path(self.tmp.name) / "mm")
         os.environ["MM_CLAUDE_PROJECTS"] = str(Path(self.tmp.name) / "projects")
         from modelmgr import cli, db, queries
